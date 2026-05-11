@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Sidebar from './components/Sidebar'
 import RampePMR from './pages/RampePMR'
+import RampeParking from './pages/RampeParking'
 import Home from './pages/Home'
 
 export default function App() {
@@ -48,6 +49,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/rampe-pmr" element={<RampePMR />} />
+            <Route path="/rampe-parking" element={<RampeParking />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
