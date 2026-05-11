@@ -1,4 +1,5 @@
-import { useMemo } from 'react'
+import { useMemo, lazy, Suspense } from 'react'
+const Ramp3D = lazy(() => import('./Ramp3D'))
 
 const SEG_STYLE = {
   racc: { stroke: '#d97706', fill: '#fef3c7', dash: '5 3' },
@@ -49,10 +50,10 @@ export default function RampeParkingViz({ segments, largeur = 3.0 }) {
   const sx = rx => ML + rx * xs
   const sy = ry => MT + UH - ry * ys            // higher elev → smaller y (up)
 
-  const svgStyle = { width: SVG_W, maxWidth: '100%', height: 'auto', display: 'block' }
+  const svgStyle = { width: '100%', height: 'auto', display: 'block' }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" style={{ width: '85%', margin: '0 auto' }}>
 
       {/* Légende */}
       <div className="flex gap-4 flex-wrap px-1">
@@ -241,6 +242,16 @@ export default function RampeParkingViz({ segments, largeur = 3.0 }) {
             )
           })}
         </svg>
+      </div>
+
+      {/* ── 3D ── */}
+      <div>
+        <p className="text-[10px] font-semibold tracking-widest text-gray-400 uppercase mb-1 px-1">Vue 3D</p>
+        <Suspense fallback={
+          <div className="bg-slate-100 rounded-xl border border-gray-200 animate-pulse" style={{ height: 320 }} />
+        }>
+          <Ramp3D segments={segments} largeur={largeur} />
+        </Suspense>
       </div>
     </div>
   )
