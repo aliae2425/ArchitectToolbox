@@ -93,14 +93,15 @@ export default function RampePMR() {
     [denivelee, longueurDispo, largeur, erpExistant],
   )
 
+  const header = (
+    <>
+      <h2 className="text-2xl font-bold text-gray-800 mb-1">Calcul de rampe PMR</h2>
+      <p className="text-sm text-gray-500">Arrêté du 8 décembre 2014 — ERP neufs et existants</p>
+    </>
+  )
+
   const controls = (
     <>
-      {/* En-tête */}
-      <div>
-        <h2 className="text-2xl font-bold text-gray-800 mb-1">Calcul de rampe PMR</h2>
-        <p className="text-sm text-gray-500">Arrêté du 8 décembre 2014 — ERP neufs et existants</p>
-      </div>
-
       {/* Formulaire */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
         <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Paramètres</h3>
@@ -248,6 +249,7 @@ export default function RampePMR() {
 
   return (
     <ToolLayout
+      header={header}
       controls={controls}
       preview={<RampeViz denivelee={denivelee} largeur={largeur} />}
     />

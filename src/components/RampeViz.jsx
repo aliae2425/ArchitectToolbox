@@ -1,18 +1,20 @@
-import { useMemo } from 'react'
+import { useMemo, useState, lazy, Suspense } from 'react'
+
+const Ramp3D = lazy(() => import('./Ramp3D'))
 
 const PALIER_L = 1.40
 const LEAD    = 1.40
 const Y_EXAG  = 6
 
 const SCENARIOS = [
-  { pente: 5,  stroke: '#16a34a', fill: '#bbf7d0', label: '5 %',  note: 'optimal' },
-  { pente: 8,  stroke: '#d97706', fill: '#fde68a', label: '8 %',  note: 'toléré ≤ 2 m' },
-  { pente: 12, stroke: '#dc2626', fill: '#fecaca', label: '12 %', note: 'ERP exist. ≤ 0,5 m' },
+  { pente: 5,  maxRampL: 10,  stroke: '#16a34a', fill: '#bbf7d0', label: '5 %',  note: 'optimal' },
+  { pente: 8,  maxRampL: 2,   stroke: '#d97706', fill: '#fde68a', label: '8 %',  note: 'toléré ≤ 2 m' },
+  { pente: 12, maxRampL: 0.5, stroke: '#dc2626', fill: '#fecaca', label: '12 %', note: 'ERP exist. ≤ 0,5 m' },
 ]
 
-function computeProfile(denivelee, pente) {
+function computeProfile(denivelee, pente, maxRampL) {
   const lr = denivelee / (pente / 100)
-  const n  = Math.ceil(lr / 10)
+  const n  = Math.ceil(lr / maxRampL)
   const lt = lr / n
   const ht = denivelee / n
 
@@ -36,7 +38,7 @@ function computeProfile(denivelee, pente) {
     if (s.x2 !== last.x || s.y2 !== last.y) pts.push({ x: s.x2, y: s.y2 })
   })
 
-  return { segs, pts, W: x, lr, n, np: n - 1 }
+  return { segs, pts, W: x, lr, n, np: n - 1, compliant: lr <= maxRampL }
 }
 
 function boundaryXs(segs) {
@@ -45,13 +47,32 @@ function boundaryXs(segs) {
   return [...set].sort((a, b) => a - b)
 }
 
+const interPaliers = segs =>
+  segs.filter((s, i) => s.type === 'palier' && i > 0 && i < segs.length - 1)
+
+function pmrSegsTo3D(segs) {
+  return segs.map(s => ({
+    id: `${s.x1}-${s.x2}`,
+    type: s.type === 'ramp' ? 'ramp' : 'racc',
+    xStart:   s.x1,
+    xEnd:     s.x2,
+    elevDep:  s.y1,
+    elevArr:  s.y2,
+    pente:    s.x2 - s.x1 > 0 ? (s.y2 - s.y1) / (s.x2 - s.x1) * 100 : 0,
+    longueur: s.x2 - s.x1,
+    hauteur:  s.y2 - s.y1,
+  }))
+}
+
 export default function RampeViz({ denivelee, largeur = 1.40 }) {
   const d = parseFloat(denivelee)
   const w = parseFloat(largeur) || 1.40
 
+  const [tab3D, setTab3D] = useState(0)
+
   const profiles = useMemo(() => {
     if (!d || d <= 0) return null
-    return SCENARIOS.map(s => ({ ...s, p: computeProfile(d, s.pente) }))
+    return SCENARIOS.map(s => ({ ...s, p: computeProfile(d, s.pente, s.maxRampL) }))
   }, [d, w])
 
   if (!profiles) {
@@ -63,11 +84,15 @@ export default function RampeViz({ denivelee, largeur = 1.40 }) {
     )
   }
 
-  // SVG rendered at fixed pixel width — font sizes are literal CSS-equivalent pixels
   const SVG_W = 560
-  const ML = 48, MR = 90, MT = 22, MB = 28
-  const UW = SVG_W - ML - MR
+  const ML = 48
+  const MR_C = 16   // coupe — no right labels
+  const MR_P = 72   // plan  — room for "L = x.xx m" label
+  const MT_C = 22, MB_C = 28
+  const MT_P = 30, MB_P = 28
+  const UW = SVG_W - ML - MR_C   // coupe scale
 
+  // Scale from widest profile (5 %) so all curves fit
   const refW = profiles[0].p.W
   const xs   = UW / refW
   const ysRaw = xs * Y_EXAG
@@ -75,208 +100,235 @@ export default function RampeViz({ denivelee, largeur = 1.40 }) {
   const ys   = UH / d
 
   const sx = rx => ML + rx * xs
-  const sy = ry => MT + UH + 10 - ry * ys
+  const sy = ry => MT_C + UH + 10 - ry * ys
 
-  const COUPE_H = MT + UH + 10 + MB
+  const COUPE_H = MT_C + UH + 10 + MB_C
 
   const ROW_H      = 28
-  const LEGEND_H   = 24
   const COTE_H     = 22
   const ROW_GAP    = 8
   const ROW_STRIDE = ROW_H + COTE_H + ROW_GAP
-  const ROWS_TOP   = MT + LEGEND_H + 6
-  const PLAN_H     = ROWS_TOP + SCENARIOS.length * ROW_STRIDE - ROW_GAP + MB
+
+  const planProfiles = profiles.filter(s => !(s.pente === 12 && !s.p.compliant))
+  const PLAN_H = MT_P + planProfiles.length * ROW_STRIDE - ROW_GAP + MB_P
+
+  // Separate scale for plan to leave room for right-side total label
+  const UW_P = SVG_W - ML - MR_P
+  const xsP  = UW_P / refW
+  const sxP  = rx => ML + rx * xsP
 
   const coteLineY = y0 => y0 + ROW_H + 6
   const coteTextY = y0 => y0 + ROW_H + 18
 
-  const interPaliers = segs =>
-    segs.filter((s, i) => s.type === 'palier' && i > 0 && i < segs.length - 1)
+  const svgStyle = { width: '100%', minWidth: 480, height: 'auto', display: 'block' }
 
-  const svgStyle = { width: SVG_W, maxWidth: '100%', height: 'auto', display: 'block' }
+  const midPaliers5 = interPaliers(profiles[0].p.segs)
 
   return (
     <div className="space-y-3">
 
-      {/* Légende scénarios */}
-      <div className="flex gap-4 flex-wrap px-1">
-        {SCENARIOS.map(s => (
-          <div key={s.pente} className="flex items-center gap-1.5 text-xs">
-            <div className="w-7 h-1.5 rounded-full flex-shrink-0" style={{ background: s.stroke }} />
-            <span className="font-bold" style={{ color: s.stroke }}>{s.label}</span>
-            <span className="text-gray-400">{s.note}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* COUPE */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 pt-3 pb-1">
+      {/* ── COUPE ── */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 pt-3 pb-4">
         <p className="text-[10px] font-semibold tracking-widest text-gray-400 uppercase mb-1">Coupe</p>
-        <svg viewBox={`0 0 ${SVG_W} ${COUPE_H}`} style={svgStyle}>
-          <defs>
-            <marker id="c-up" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="5" markerHeight="5" orient="auto">
-              <polygon points="0,0 6,3 0,6" fill="#9ca3af" />
-            </marker>
-            <marker id="c-dn" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-              <polygon points="0,0 6,3 0,6" fill="#9ca3af" />
-            </marker>
-          </defs>
+        <div className="overflow-x-auto">
+          <svg viewBox={`0 0 ${SVG_W} ${COUPE_H}`} style={svgStyle}>
+            <defs>
+              <marker id="c-up" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="5" markerHeight="5" orient="auto">
+                <polygon points="0,0 6,3 0,6" fill="#9ca3af" />
+              </marker>
+              <marker id="c-dn" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                <polygon points="0,0 6,3 0,6" fill="#9ca3af" />
+              </marker>
+            </defs>
 
-          <line x1={ML - 6} y1={sy(0)} x2={SVG_W - MR + 80} y2={sy(0)} stroke="#e5e7eb" strokeWidth="1" />
-          <line x1={ML - 6} y1={sy(d)} x2={SVG_W - MR + 80} y2={sy(d)} stroke="#e5e7eb" strokeWidth="1" strokeDasharray="5 4" />
+            {/* Reference lines */}
+            <line x1={ML - 6} y1={sy(0)} x2={SVG_W} y2={sy(0)} stroke="#e5e7eb" strokeWidth="1" />
+            <line x1={ML - 6} y1={sy(d)} x2={SVG_W} y2={sy(d)} stroke="#e5e7eb" strokeWidth="1" strokeDasharray="5 4" />
 
-          <line x1={ML - 28} y1={sy(0)} x2={ML - 28} y2={sy(d)}
-            stroke="#9ca3af" strokeWidth="1.5" markerEnd="url(#c-up)" markerStart="url(#c-dn)" />
-          <text x={ML - 32} y={(sy(0) + sy(d)) / 2} fontSize="10" fill="#6b7280"
-            textAnchor="middle" dominantBaseline="middle"
-            transform={`rotate(-90,${ML - 32},${(sy(0) + sy(d)) / 2})`}>
-            Δh = {d.toFixed(2)} m
-          </text>
-
-          <text x={ML - 4} y={sy(0) + 13} fontSize="9" fill="#9ca3af">N.F. ±0</text>
-          <text x={ML - 4} y={sy(d) - 5}  fontSize="9" fill="#9ca3af">+{d.toFixed(2)} m</text>
-
-          {profiles.map(({ pente, stroke, p }, i) => {
-            const ptsStr = p.pts.map(pt => `${sx(pt.x).toFixed(1)},${sy(pt.y).toFixed(1)}`).join(' ')
-            const last   = p.pts[p.pts.length - 1]
-            return (
-              <g key={pente}>
-                <polyline points={ptsStr} fill="none" stroke={stroke}
-                  strokeWidth={i === 0 ? 2.5 : 2}
-                  strokeDasharray={pente === 12 ? '7 4' : ''}
-                  strokeLinejoin="round" strokeLinecap="round" />
-                <text x={sx(last.x) + 6} y={sy(last.y)} fontSize="12" fill={stroke}
-                  fontWeight="700" dominantBaseline="middle">{pente} %</text>
-                <text x={sx(last.x) + 6} y={sy(last.y) + 14} fontSize="10" fill={stroke} opacity="0.75">
-                  {p.W.toFixed(2)} m
-                </text>
-              </g>
-            )
-          })}
-
-          {profiles.map(({ stroke, p }) =>
-            interPaliers(p.segs).map((seg, i) => (
+            {/* Intermediate NF reference lines (5 % reference) */}
+            {midPaliers5.map((seg, i) => (
               <line key={i}
-                x1={sx(seg.x1)} y1={sy(seg.y1) - 10}
-                x2={sx(seg.x1)} y2={sy(seg.y1) + 10}
-                stroke={stroke} strokeWidth="1" strokeDasharray="3 2" opacity="0.55" />
-            ))
-          )}
-        </svg>
+                x1={ML - 6} y1={sy(seg.y1)} x2={SVG_W} y2={sy(seg.y1)}
+                stroke="#e5e7eb" strokeWidth="1" strokeDasharray="5 4" opacity="0.8" />
+            ))}
+
+            {/* Δh arrow */}
+            <line x1={ML - 28} y1={sy(0)} x2={ML - 28} y2={sy(d)}
+              stroke="#9ca3af" strokeWidth="1.5" markerEnd="url(#c-up)" markerStart="url(#c-dn)" />
+            <text x={ML - 32} y={(sy(0) + sy(d)) / 2} fontSize="10" fill="#6b7280"
+              textAnchor="middle" dominantBaseline="middle"
+              transform={`rotate(-90,${ML - 32},${(sy(0) + sy(d)) / 2})`}>
+              Δh = {d.toFixed(2)} m
+            </text>
+
+            {/* NF labels */}
+            <text x={ML - 4} y={sy(0) + 13} fontSize="9" fill="#9ca3af">N.F. ±0</text>
+            {midPaliers5.map((seg, i) => (
+              <text key={i} x={ML - 4} y={sy(seg.y1) - 4} fontSize="9" fill="#9ca3af">
+                +{seg.y1.toFixed(2)} m
+              </text>
+            ))}
+            <text x={ML - 4} y={sy(d) - 5} fontSize="9" fill="#9ca3af">+{d.toFixed(2)} m</text>
+
+            {/* Profile polylines — all 3 overlaid */}
+            {profiles.map(({ pente, stroke, p }, i) => {
+              const ptsStr = p.pts.map(pt => `${sx(pt.x).toFixed(1)},${sy(pt.y).toFixed(1)}`).join(' ')
+              return (
+                <polyline key={pente} points={ptsStr} fill="none" stroke={stroke}
+                  strokeWidth={i === 0 ? 2.5 : 2}
+                  strokeDasharray={!p.compliant ? '7 4' : ''}
+                  strokeLinejoin="round" strokeLinecap="round" />
+              )
+            })}
+
+            {/* Palier tick marks */}
+            {profiles.map(({ stroke, p }) =>
+              interPaliers(p.segs).map((seg, i) => (
+                <line key={i}
+                  x1={sx(seg.x1)} y1={sy(seg.y1) - 10}
+                  x2={sx(seg.x1)} y2={sy(seg.y1) + 10}
+                  stroke={stroke} strokeWidth="1" strokeDasharray="3 2" opacity="0.55" />
+              ))
+            )}
+          </svg>
+        </div>
+
+        <div className="flex gap-5 flex-wrap pt-3 mt-1 border-t border-gray-100">
+          {SCENARIOS.map(s => (
+            <div key={s.pente} className="flex items-center gap-1.5 text-xs">
+              <div className="w-7 h-1.5 rounded-full flex-shrink-0" style={{ background: s.stroke }} />
+              <span className="font-bold" style={{ color: s.stroke }}>{s.label}</span>
+              <span className="text-gray-400">{s.note}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* PLAN */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 pt-3 pb-2">
+      {/* ── PLAN ── */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 pt-3 pb-4">
         <p className="text-[10px] font-semibold tracking-widest text-gray-400 uppercase mb-1">Plan</p>
-        <svg viewBox={`0 0 ${SVG_W} ${PLAN_H}`} style={svgStyle}>
-          <defs>
-            <marker id="p-up" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="5" markerHeight="5" orient="auto">
-              <polygon points="0,0 6,3 0,6" fill="#9ca3af" />
-            </marker>
-            <marker id="p-dn" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-              <polygon points="0,0 6,3 0,6" fill="#9ca3af" />
-            </marker>
-          </defs>
+        <div className="overflow-x-auto">
+          <svg viewBox={`0 0 ${SVG_W} ${PLAN_H}`} style={svgStyle}>
+            <defs>
+              <marker id="p-up" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="5" markerHeight="5" orient="auto">
+                <polygon points="0,0 6,3 0,6" fill="#9ca3af" />
+              </marker>
+              <marker id="p-dn" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                <polygon points="0,0 6,3 0,6" fill="#9ca3af" />
+              </marker>
+            </defs>
 
-          {/* Légende types */}
-          <rect x={ML} y={MT} width={12} height={11} rx="2"
-            fill="#bbf7d0" stroke="#16a34a" strokeWidth="1" />
-          <text x={ML + 17} y={MT + 5.5} fontSize="10" fill="#374151" dominantBaseline="middle">
-            Rampe
-          </text>
-          <rect x={ML + 80} y={MT} width={12} height={11} rx="2"
-            fill="#f3f4f6" stroke="#9ca3af" strokeWidth="1" />
-          <text x={ML + 97} y={MT + 5.5} fontSize="10" fill="#374151" dominantBaseline="middle">
-            Palier de repos
-          </text>
-          <rect x={ML + 218} y={MT} width={12} height={11} rx="2"
-            fill="#f0fdf4" stroke="#16a34a" strokeWidth="1" strokeDasharray="3 2" />
-          <text x={ML + 235} y={MT + 5.5} fontSize="10" fill="#374151" dominantBaseline="middle">
-            Approche / départ
-          </text>
+            {/* Largeur dimension */}
+            <line x1={ML - 28} y1={MT_P} x2={ML - 28} y2={MT_P + ROW_H}
+              stroke="#9ca3af" strokeWidth="1" markerEnd="url(#p-up)" markerStart="url(#p-dn)" />
+            <text x={ML - 33} y={MT_P + ROW_H / 2} fontSize="10" fill="#6b7280"
+              textAnchor="middle" dominantBaseline="middle"
+              transform={`rotate(-90,${ML - 33},${MT_P + ROW_H / 2})`}>
+              l = {w.toFixed(2)} m
+            </text>
 
-          {/* Largeur dimension */}
-          <line x1={ML - 28} y1={ROWS_TOP} x2={ML - 28} y2={ROWS_TOP + ROW_H}
-            stroke="#9ca3af" strokeWidth="1" markerEnd="url(#p-up)" markerStart="url(#p-dn)" />
-          <text x={ML - 32} y={ROWS_TOP + ROW_H / 2} fontSize="10" fill="#6b7280"
-            textAnchor="middle" dominantBaseline="middle"
-            transform={`rotate(-90,${ML - 32},${ROWS_TOP + ROW_H / 2})`}>
-            l = {w.toFixed(2)} m
-          </text>
+            {/* Scenario rows */}
+            {planProfiles.map(({ stroke, fill, label, p }, idx) => {
+              const y0  = MT_P + idx * ROW_STRIDE
+              const clY = coteLineY(y0)
+              const ctY = coteTextY(y0)
+              const bxs = boundaryXs(p.segs)
 
-          {/* Rangées */}
-          {profiles.map(({ stroke, fill, label, p }, idx) => {
-            const y0  = ROWS_TOP + idx * ROW_STRIDE
-            const clY = coteLineY(y0)
-            const ctY = coteTextY(y0)
-            const bxs = boundaryXs(p.segs)
+              return (
+                <g key={label}>
+                  {p.segs.map((seg, si) => {
+                    const isApprDep = si === 0 || si === p.segs.length - 1
+                    const isNonConf = !p.compliant && seg.type === 'ramp'
+                    return (
+                      <rect key={si}
+                        x={sxP(seg.x1)} y={y0}
+                        width={Math.max(sxP(seg.x2) - sxP(seg.x1), 0.5)}
+                        height={ROW_H}
+                        fill={seg.type === 'ramp' ? fill : isApprDep ? '#f0fdf4' : '#f3f4f6'}
+                        fillOpacity={isNonConf ? 0.45 : 1}
+                        stroke={stroke}
+                        strokeWidth="1"
+                        strokeDasharray={
+                          isNonConf ? '5 3' :
+                          seg.type === 'palier' && isApprDep ? '3 2' :
+                          ''
+                        }
+                      />
+                    )
+                  })}
 
-            return (
-              <g key={label}>
-                {p.segs.map((seg, si) => {
-                  const isApprDep = si === 0 || si === p.segs.length - 1
-                  return (
-                    <rect key={si}
-                      x={sx(seg.x1)} y={y0}
-                      width={Math.max(sx(seg.x2) - sx(seg.x1), 0.5)}
-                      height={ROW_H}
-                      fill={seg.type === 'ramp' ? fill : isApprDep ? '#f0fdf4' : '#f3f4f6'}
-                      stroke={stroke}
-                      strokeWidth="1"
-                      strokeDasharray={seg.type === 'palier' && isApprDep ? '3 2' : ''}
-                    />
-                  )
-                })}
+                  {/* Dimension line with ticks */}
+                  <line x1={sxP(0)} y1={clY} x2={sxP(p.W)} y2={clY}
+                    stroke="#d1d5db" strokeWidth="0.75" />
+                  {bxs.map(bx => (
+                    <line key={bx}
+                      x1={sxP(bx)} y1={clY - 4} x2={sxP(bx)} y2={clY + 4}
+                      stroke="#9ca3af" strokeWidth="0.75" />
+                  ))}
 
-                <text x={sx(p.W) + 8} y={y0 + ROW_H / 2 - 6}
-                  fontSize="12" fill={stroke} fontWeight="700" dominantBaseline="middle">
-                  {label}
-                </text>
-                <text x={sx(p.W) + 8} y={y0 + ROW_H / 2 + 9} fontSize="10" fill="#9ca3af">
-                  {p.W.toFixed(2)} m
-                </text>
+                  {/* Segment length labels */}
+                  {p.segs.map((seg, si) => {
+                    const segPx = sxP(seg.x2) - sxP(seg.x1)
+                    const midX  = (sxP(seg.x1) + sxP(seg.x2)) / 2
+                    const lenM  = seg.x2 - seg.x1
+                    if (segPx < 30) return null
+                    return (
+                      <text key={si} x={midX} y={ctY} fontSize="9"
+                        fill={seg.type === 'ramp' ? stroke : '#9ca3af'}
+                        fontWeight={seg.type === 'ramp' ? '600' : '400'}
+                        textAnchor="middle">
+                        {lenM.toFixed(2)} m
+                      </text>
+                    )
+                  })}
 
-                {/* Continuous dimension line */}
-                <line x1={sx(0)} y1={clY} x2={sx(p.W)} y2={clY}
-                  stroke="#d1d5db" strokeWidth="0.75" />
+                  {/* Total cote — right of dimension line, every row */}
+                  <text x={sxP(p.W) + 6} y={clY} fontSize="9" fill={stroke}
+                    fontWeight="600" dominantBaseline="middle">
+                    L = {p.W.toFixed(2)} m
+                  </text>
+                </g>
+              )
+            })}
+          </svg>
+        </div>
 
-                {bxs.map(bx => (
-                  <line key={bx}
-                    x1={sx(bx)} y1={clY - 4} x2={sx(bx)} y2={clY + 4}
-                    stroke="#9ca3af" strokeWidth="0.75" />
-                ))}
-
-                {p.segs.map((seg, si) => {
-                  const segPx = sx(seg.x2) - sx(seg.x1)
-                  const midX  = (sx(seg.x1) + sx(seg.x2)) / 2
-                  const lenM  = seg.x2 - seg.x1
-                  if (segPx < 30) return null
-                  return (
-                    <text key={si} x={midX} y={ctY} fontSize="9"
-                      fill={seg.type === 'ramp' ? stroke : '#9ca3af'}
-                      fontWeight={seg.type === 'ramp' ? '600' : '400'}
-                      textAnchor="middle">
-                      {lenM.toFixed(2)} m
-                    </text>
-                  )
-                })}
-
-                {idx === 0 && (
-                  <g>
-                    <line x1={sx(0)} y1={y0 - 9} x2={sx(p.W)} y2={y0 - 9}
-                      stroke="#d1d5db" strokeWidth="0.75"
-                      markerEnd="url(#p-up)" markerStart="url(#p-dn)" />
-                    <text x={(sx(0) + sx(p.W)) / 2} y={y0 - 15}
-                      fontSize="9" fill="#6b7280" textAnchor="middle">
-                      L totale = {p.W.toFixed(2)} m
-                    </text>
-                  </g>
-                )}
-              </g>
-            )
-          })}
-        </svg>
+        <div className="flex gap-5 flex-wrap pt-3 mt-1 border-t border-gray-100">
+          <div className="flex items-center gap-2 text-xs">
+            <div className="w-5 h-3.5 rounded-sm border border-green-500 flex-shrink-0" style={{ background: '#bbf7d0' }} />
+            <span className="text-gray-600">Rampe</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <div className="w-5 h-3.5 rounded-sm border border-gray-300 bg-gray-100 flex-shrink-0" />
+            <span className="text-gray-600">Palier de repos</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <div className="w-5 h-3.5 rounded-sm flex-shrink-0" style={{ background: '#f0fdf4', border: '1px dashed #16a34a' }} />
+            <span className="text-gray-600">Approche / départ</span>
+          </div>
+        </div>
       </div>
+
+      {/* ── VUE 3D ── */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 pt-3 pb-4">
+        <div className="flex rounded-lg border border-gray-200 overflow-hidden mb-2">
+          {SCENARIOS.map((s, i) => (
+            <button key={s.pente} onClick={() => setTab3D(i)}
+              className={`flex-1 py-1.5 text-xs font-semibold transition-colors ${
+                tab3D === i ? 'text-white' : 'bg-white text-gray-500 hover:bg-gray-50'
+              }`}
+              style={tab3D === i ? { backgroundColor: s.stroke } : {}}>
+              {s.label}
+              {!profiles[i].p.compliant && <span className="ml-1 opacity-75">⚠</span>}
+            </button>
+          ))}
+        </div>
+        <p className="text-[10px] font-semibold tracking-widest text-gray-400 uppercase mb-1">Vue 3D</p>
+        <Suspense fallback={<div className="bg-slate-100 rounded-xl border border-gray-200 animate-pulse" style={{ height: 320 }} />}>
+          <Ramp3D segments={pmrSegsTo3D(profiles[tab3D].p.segs)} largeur={w} />
+        </Suspense>
+      </div>
+
     </div>
   )
 }
