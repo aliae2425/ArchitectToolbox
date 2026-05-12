@@ -43,6 +43,52 @@ function computeSegments(rawSegs, inputMode, largeurNum) {
   return withPositions(segs)
 }
 
+// Returns { vals: {[id]: {field: val}}, impossible: bool, errorMsg: string }
+function computeAideVals(rawSegs, H, inputMode) {
+  const ramps = rawSegs.filter(s => s.type === 'ramp' && (parseFloat(s.pente) || 0) > 0)
+  if (!ramps.length) return { vals: {}, impossible: false }
+
+  const vals = {}
+
+  if (inputMode === 'hauteur') {
+    const locked   = ramps.filter(s => s.hauteur !== '')
+    const unlocked = ramps.filter(s => s.hauteur === '')
+    if (!unlocked.length) {
+      const total = locked.reduce((sum, s) => sum + (parseFloat(s.hauteur) || 0), 0)
+      return { vals: {}, impossible: true,
+        errorMsg: `Tous les segments ont une hauteur saisie (total ${total.toFixed(2)} m). Videz un champ ou ajoutez un segment.` }
+    }
+    const H_locked = locked.reduce((sum, s) => sum + (parseFloat(s.hauteur) || 0), 0)
+    const H_rem    = H - H_locked
+    if (H_rem <= 0) {
+      return { vals: {}, impossible: true,
+        errorMsg: `Les hauteurs saisies (${H_locked.toFixed(2)} m) dépassent la hauteur à franchir (${H.toFixed(2)} m).` }
+    }
+    const h_each = H_rem / unlocked.length
+    for (const s of unlocked) vals[s.id] = { hauteur: h_each.toFixed(4) }
+    return { vals, impossible: false }
+  }
+
+  // inputMode === 'longueur'
+  const withLon = ramps.filter(s => s.longueur !== '')
+  if (!withLon.length) {
+    // fallback: equal H → fill longueur from pente
+    const h_each = H / ramps.length
+    for (const s of ramps) {
+      const p = parseFloat(s.pente) || 0
+      if (p > 0) vals[s.id] = { longueur: (h_each / (p / 100)).toFixed(4) }
+    }
+    return { vals, impossible: false }
+  }
+  const total_L = withLon.reduce((sum, s) => sum + (parseFloat(s.longueur) || 0), 0)
+  if (total_L <= 0) {
+    return { vals: {}, impossible: true, errorMsg: 'Longueur totale nulle — vérifiez les valeurs saisies.' }
+  }
+  const pente_unif = (H / total_L) * 100
+  for (const s of withLon) vals[s.id] = { pente: pente_unif.toFixed(2) }
+  return { vals, impossible: false }
+}
+
 function Badge({ niveau, label }) {
   const styles = {
     ok:      'bg-green-100 text-green-800 border-green-200',
@@ -57,12 +103,13 @@ function Badge({ niveau, label }) {
   )
 }
 
-function Derived({ label, value }) {
+function Derived({ label, value, unit = 'm' }) {
   if (!value || isNaN(value) || value <= 0) return null
+  const formatted = unit === '%' ? value.toFixed(1) : value.toFixed(2)
   return (
     <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
       <span className="text-gray-400">→</span>
-      <span className="font-medium text-gray-700">{label} : {value.toFixed(2)} m</span>
+      <span className="font-medium text-gray-700">{label} : {formatted} {unit}</span>
     </div>
   )
 }
@@ -74,17 +121,38 @@ const INIT_SEGS = [
 ]
 
 export default function RampeVelo() {
-  const [segs, setSegs]           = useState(INIT_SEGS)
-  const [largeur, setLargeur]     = useState('1.50')
-  const [inputMode, setInputMode] = useState('hauteur')
+  const [segs, setSegs]               = useState(INIT_SEGS)
+  const [largeur, setLargeur]         = useState('1.50')
+  const [inputMode, setInputMode]     = useState('hauteur')
+  const [hauteurTotale, setHauteurTotale] = useState('')
 
   const largeurNum  = parseFloat(largeur) || 0
+  const H_aide      = parseFloat(hauteurTotale) || 0
   const dragIdx     = useRef(null)
   const [dragOver, setDragOver] = useState(null)
 
+  const aideResult = useMemo(() => {
+    if (H_aide <= 0) return { vals: {}, impossible: false }
+    return computeAideVals(segs, H_aide, inputMode)
+  }, [segs, H_aide, inputMode])
+
+  const derivedSegs = useMemo(() => {
+    if (H_aide <= 0) return segs
+    const { vals } = aideResult
+    return segs.map(s => {
+      const av = vals[s.id]
+      if (!av) return s
+      const next = { ...s }
+      if (av.pente   !== undefined)                    next.pente   = av.pente
+      if (av.hauteur !== undefined && s.hauteur === '') next.hauteur = av.hauteur
+      if (av.longueur !== undefined && s.longueur === '') next.longueur = av.longueur
+      return next
+    })
+  }, [segs, H_aide, aideResult])
+
   const segments = useMemo(
-    () => computeSegments(segs, inputMode, largeurNum),
-    [segs, inputMode, largeurNum],
+    () => computeSegments(derivedSegs, inputMode, largeurNum),
+    [derivedSegs, inputMode, largeurNum],
   )
 
   function updateSeg(id, field, value) {
@@ -138,6 +206,50 @@ export default function RampeVelo() {
 
   const controls = (
     <>
+      {/* Aide au calcul — Hauteur totale */}
+      <div className={`rounded-xl border shadow-sm px-5 py-4 transition-colors ${
+        aideResult.impossible
+          ? 'bg-red-50 border-red-300'
+          : H_aide > 0 ? 'bg-brand-50 border-brand-200' : 'bg-white border-gray-200'
+      }`}>
+        <h3 className={`text-xs font-semibold uppercase tracking-wide mb-3 ${
+          aideResult.impossible ? 'text-red-600' : 'text-gray-500'
+        }`}>
+          Aide au calcul
+        </h3>
+        <label className="block">
+          <span className="text-sm font-medium text-gray-700">Hauteur totale à franchir (m)</span>
+          <div className="flex items-center gap-2 mt-1">
+            <input
+              type="number" min="0" step="0.05"
+              value={hauteurTotale}
+              onChange={e => setHauteurTotale(e.target.value)}
+              placeholder="ex. 1.20"
+              className={`w-28 rounded-lg border px-3 py-2 text-sm text-right outline-none focus:ring-1 ${
+                aideResult.impossible
+                  ? 'border-red-400 focus:border-red-500 focus:ring-red-400 bg-white'
+                  : H_aide > 0
+                    ? 'border-brand-400 focus:border-brand-500 focus:ring-brand-500 bg-white'
+                    : 'border-gray-300 focus:border-brand-500 focus:ring-brand-500'
+              }`}
+            />
+            <span className="text-sm text-gray-400">m</span>
+            {H_aide > 0 && !aideResult.impossible && (
+              <span className="text-xs font-semibold text-brand-600 bg-brand-100 px-2 py-0.5 rounded-full">
+                Aide active
+              </span>
+            )}
+          </div>
+          {aideResult.impossible ? (
+            <p className="mt-2 text-xs text-red-600 font-medium">⚠ {aideResult.errorMsg}</p>
+          ) : (
+            <p className="mt-1.5 text-[10px] text-gray-400">
+              Distribue la hauteur entre les rampes · met à jour les pentes si les longueurs sont saisies.
+            </p>
+          )}
+        </label>
+      </div>
+
       {/* Segments */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         {/* Header + tabs */}
@@ -159,15 +271,21 @@ export default function RampeVelo() {
 
         <div className="px-5 pb-5 space-y-3">
           {segs.map((seg, idx) => {
-            const pente   = parseFloat(seg.pente)   || 0
-            const hauteur = parseFloat(seg.hauteur) || 0
-            const lon     = parseFloat(seg.longueur) || 0
-            const derivedLon = pente > 0 && hauteur > 0 ? hauteur / (pente / 100) : null
-            const derivedHaut = pente > 0 && lon > 0    ? lon * (pente / 100)     : null
-
             const isPalier     = seg.type === 'palier'
+            const pente        = parseFloat(seg.pente)   || 0
+            const hauteur      = parseFloat(seg.hauteur) || 0
+            const lon          = parseFloat(seg.longueur) || 0
+            const derivedHaut  = pente > 0 && lon > 0 ? lon * (pente / 100) : null
             const palierLon    = parseFloat(seg.longueur) || 0
             const palierTooShort = isPalier && largeurNum > 0 && palierLon > 0 && palierLon < largeurNum
+
+            // aide values for this segment
+            const av        = aideResult.vals[seg.id] ?? {}
+            const showAideP = H_aide > 0 && av.pente    !== undefined
+            const showAideH = H_aide > 0 && av.hauteur  !== undefined && seg.hauteur === ''
+            const showAideL = H_aide > 0 && av.longueur !== undefined && seg.longueur === ''
+            const penteDisp = showAideP ? parseFloat(av.pente) : pente
+            const hauteurDisp = showAideH ? parseFloat(av.hauteur) : hauteur
 
             return (
               <div key={seg.id}
@@ -227,32 +345,47 @@ export default function RampeVelo() {
                   <div className="grid grid-cols-2 gap-3">
                     <label className="block">
                       <span className="text-xs text-gray-600">Pente (%)</span>
-                      <input type="number" min="0" max="25" step="0.5" value={seg.pente}
-                        onChange={e => updateSeg(seg.id, 'pente', e.target.value)}
-                        className="mt-1 block w-full rounded border border-gray-300 px-2 py-1.5 text-sm outline-none focus:border-brand-500" />
+                      <input type="number" min="0" max="25" step="0.5"
+                        value={showAideP ? av.pente : seg.pente}
+                        readOnly={showAideP}
+                        onFocus={e => { if (showAideP) e.target.select() }}
+                        onChange={e => { if (!showAideP) updateSeg(seg.id, 'pente', e.target.value) }}
+                        title={showAideP ? "Pente calculée — modifiez la longueur pour ajuster" : ''}
+                        className={`mt-1 block w-full rounded border px-2 py-1.5 text-sm outline-none focus:border-brand-500 ${
+                          showAideP ? 'border-amber-300 bg-amber-50 text-amber-700 cursor-not-allowed' : 'border-gray-300'
+                        }`} />
                     </label>
 
                     {inputMode === 'hauteur' ? (
                       <label className="block">
                         <span className="text-xs text-gray-600">Hauteur (m)</span>
-                        <input type="number" min="0" step="0.01" value={seg.hauteur}
+                        <input type="number" min="0" step="0.01"
+                          value={showAideH ? av.hauteur : seg.hauteur}
+                          onFocus={e => { if (showAideH) e.target.select() }}
                           onChange={e => updateSeg(seg.id, 'hauteur', e.target.value)}
-                          className="mt-1 block w-full rounded border border-gray-300 px-2 py-1.5 text-sm outline-none focus:border-brand-500" />
-                        <Derived label="Longueur" value={derivedLon} />
+                          className={`mt-1 block w-full rounded border px-2 py-1.5 text-sm outline-none focus:border-brand-500 ${
+                            showAideH ? 'border-amber-300 bg-amber-50 text-amber-700' : 'border-gray-300'
+                          }`} />
+                        <Derived label="Longueur"
+                          value={penteDisp > 0 && hauteurDisp > 0 ? hauteurDisp / (penteDisp / 100) : null} />
                       </label>
                     ) : (
                       <label className="block">
                         <span className="text-xs text-gray-600">Longueur (m)</span>
-                        <input type="number" min="0" step="0.01" value={seg.longueur}
+                        <input type="number" min="0" step="0.01"
+                          value={showAideL ? av.longueur : seg.longueur}
+                          onFocus={e => { if (showAideL) e.target.select() }}
                           onChange={e => updateSeg(seg.id, 'longueur', e.target.value)}
-                          className="mt-1 block w-full rounded border border-gray-300 px-2 py-1.5 text-sm outline-none focus:border-brand-500" />
+                          className={`mt-1 block w-full rounded border px-2 py-1.5 text-sm outline-none focus:border-brand-500 ${
+                            showAideL ? 'border-amber-300 bg-amber-50 text-amber-700' : 'border-gray-300'
+                          }`} />
                         <Derived label="Hauteur" value={derivedHaut} />
                       </label>
                     )}
 
-                    {pente > 0 && (
+                    {penteDisp > 0 && (
                       <div className="col-span-2">
-                        <Badge {...slopeStatut(pente)} />
+                        <Badge {...slopeStatut(penteDisp)} />
                       </div>
                     )}
                   </div>
