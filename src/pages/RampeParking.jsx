@@ -87,13 +87,15 @@ export default function RampeParking() {
   const totalL = segments.at(-1)?.xEnd   ?? 0
   const totalH = segments.at(-1)?.elevArr ?? 0
 
+  const header = (
+    <>
+      <h2 className="text-2xl font-bold text-gray-800 mb-1">Calcul de rampe de parking</h2>
+      <p className="text-sm text-gray-500">NF P91-100 — Parcs de stationnement</p>
+    </>
+  )
+
   const controls = (
     <>
-      <div>
-        <h2 className="text-2xl font-bold text-gray-800 mb-1">Calcul de rampe de parking</h2>
-        <p className="text-sm text-gray-500">NF P91-100 — Parcs de stationnement</p>
-      </div>
-
       {/* Mode toggle */}
       <div className="flex rounded-lg border border-gray-200 overflow-hidden">
         {[['fixe', 'Réglementaire'], ['libre', 'Libre']].map(([m, label]) => (
@@ -248,6 +250,7 @@ export default function RampeParking() {
 
   return (
     <ToolLayout
+      header={header}
       controls={controls}
       preview={<RampeParkingViz segments={segments} largeur={parseFloat(largeur) || 3.0} />}
     />
