@@ -1,88 +1,88 @@
 # Architect Toolbox
 
-A collection of interactive calculation tools for architects and building engineers, built with React and Vite.
+Une collection d'outils de calcul interactifs pour architectes et ingénieurs du bâtiment, développée avec React et Vite.
 
-## Tools
+## Outils
 
-### Rampe PMR — Wheelchair Ramp Calculator
-Checks compliance with the French accessibility regulation (*Arrêté du 8 décembre 2014*) for ERP (public buildings), new construction and existing buildings.
+### Rampe PMR — Calculateur de rampe d'accès handicapé
+Vérifie la conformité à la réglementation française d'accessibilité (*Arrêté du 8 décembre 2014*) pour les ERP (établissements recevant du public), constructions neuves et bâtiments existants.
 
-- Slope compliance check (5 %, 8 %, 12 % thresholds)
-- Automatic rest-landing count (required every 10 m)
-- Width validation (1.40 m new / 1.20 m existing)
-- Handrail requirement detection
-- Live 2D cross-section preview
+- Vérification de la pente (seuils à 5 %, 8 %, 12 %)
+- Calcul automatique des paliers de repos (obligatoires tous les 10 m)
+- Validation de la largeur (1,40 m neuf / 1,20 m existant)
+- Détection des exigences en garde-corps
+- Aperçu 2D en coupe transversale en temps réel
 
-### Rampe Parking — Parking Ramp Calculator
-Designs parking ramps per the French standard **NF P91-100**, in two modes:
+### Rampe Parking — Calculateur de rampe de parking
+Conçoit des rampes de stationnement selon la norme française **NF P91-100**, en deux modes :
 
 | Mode | Description |
 |------|-------------|
-| **Réglementaire** | Auto-computes bottom and top transitions from total height + slope |
-| **Libre** | Free segment editor — set slope & height independently per section |
+| **Réglementaire** | Calcul automatique des transitions basse et haute à partir de la hauteur totale et de la pente |
+| **Libre** | Éditeur de segments libres — pente et hauteur définissables indépendamment par section |
 
-- Slope badge (≤ 15 % comfort / ≤ 17 % NF / ≤ 20 % exceptional)
-- Per-segment breakdown table (length, slope, height, elevation)
-- Live 2D elevation profile
-- Live 3D Three.js scene (lazy-loaded)
+- Indicateur de pente (≤ 15 % confort / ≤ 17 % NF / ≤ 20 % exceptionnel)
+- Tableau détaillé par segment (longueur, pente, hauteur, dénivelé)
+- Profil d'élévation 2D en temps réel
+- Scène 3D Three.js en temps réel (chargement différé)
 
-## Tech Stack
+## Technologies
 
-| Layer | Library |
-|-------|---------|
-| UI framework | React 18 |
+| Couche | Bibliothèque |
+|--------|--------------|
+| Framework UI | React 18 |
 | Bundler | Vite 5 |
-| Styling | Tailwind CSS 3 |
-| Routing | React Router 6 |
-| 3D rendering | Three.js 0.184 |
+| Styles | Tailwind CSS 3 |
+| Routage | React Router 6 |
+| Rendu 3D | Three.js 0.184 |
 
-## Getting Started
+## Démarrage rapide
 
 ```bash
-# Install dependencies
+# Installer les dépendances
 npm install
 
-# Start development server
+# Lancer le serveur de développement
 npm run dev
 
-# Build for production
+# Construire pour la production
 npm run build
 
-# Preview production build
+# Prévisualiser la version de production
 npm run preview
 ```
 
-Requires **Node.js 18+**.
+Nécessite **Node.js 18+**.
 
-## Project Structure
+## Structure du projet
 
 ```
 src/
 ├── components/
-│   ├── Sidebar.jsx          # Navigation sidebar
-│   ├── ToolLayout.jsx       # Split-panel layout (controls / preview)
-│   ├── RampeViz.jsx         # 2D PMR ramp SVG
-│   ├── RampeParkingViz.jsx  # 2D parking ramp SVG + 3D mount
-│   └── Ramp3D.jsx           # Three.js 3D ramp scene
+│   ├── Sidebar.jsx          # Barre de navigation latérale
+│   ├── ToolLayout.jsx       # Mise en page deux panneaux (contrôles / aperçu)
+│   ├── RampeViz.jsx         # SVG 2D rampe PMR
+│   ├── RampeParkingViz.jsx  # SVG 2D rampe parking + montage 3D
+│   └── Ramp3D.jsx           # Scène 3D Three.js
 └── pages/
-    ├── Home.jsx             # Landing page
-    ├── RampePMR.jsx         # PMR calculator page
-    └── RampeParking.jsx     # Parking ramp calculator page
+    ├── Home.jsx             # Page d'accueil
+    ├── RampePMR.jsx         # Page calculateur PMR
+    └── RampeParking.jsx     # Page calculateur rampe parking
 ```
 
-## Regulatory References
+## Références réglementaires
 
 - **Rampe PMR** — Arrêté du 8 décembre 2014 relatif à l'accessibilité aux personnes handicapées des ERP et des IOP, Annexes 2 & 3
 - **Rampe Parking** — NF P91-100 : Parcs de stationnement — Règles de calcul et de conception
 
-## Contributing
+## Contribuer
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feat/my-tool`)
-3. Commit your changes (`git commit -m 'feat: add my tool'`)
-4. Push to the branch (`git push origin feat/my-tool`)
-5. Open a Pull Request
+1. Forker le dépôt
+2. Créer une branche de fonctionnalité (`git checkout -b feat/mon-outil`)
+3. Valider les modifications (`git commit -m 'feat: ajout de mon outil'`)
+4. Pousser la branche (`git push origin feat/mon-outil`)
+5. Ouvrir une Pull Request
 
-## License
+## Licence
 
 MIT
