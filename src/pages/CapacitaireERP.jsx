@@ -2,110 +2,48 @@ import { useState, useMemo, useRef } from 'react'
 import CapacitaireViz from '../components/CapacitaireViz'
 import ToolLayout from '../components/ToolLayout'
 
-// ─── Données réglementaires ───────────────────────────────────────────────────
-// Source : Arrêté du 25 juin 1980 modifié (Règlement de sécurité ERP)
-// Catégories : Art. R123-19 du CCH
+// ─── Présets ratio d'occupation ───────────────────────────────────────────────
 
-const GROUPES = [
-  {
-    groupe: 'Type L — Réunion, spectacle, conférence',
-    items: [
-      { id: 'reunion_assis',    label: 'Réunion — assis (sièges mobiles)',          calc: 'surface', density: 1,   densityLabel: '1 pers/m²',            ref: 'MS 5 — convention sièges mobiles' },
-      { id: 'spectacle_places', label: 'Spectacle / conférence (places numérotées)',calc: 'places',  density: null, densityLabel: '1 pers/siège',          ref: 'MS 5 §1 — sièges fixes numérotés' },
-      { id: 'salle_debout',     label: 'Debout — standing, hall, foyer',            calc: 'surface', density: 4,   densityLabel: '4 pers/m² (0,25 m²/p)', ref: 'MS 5 §1 — public debout' },
-    ],
-  },
-  {
-    groupe: 'Type M — Magasins de vente',
-    items: [
-      { id: 'vente_rdc',   label: 'Vente — RdC / entresol', calc: 'M_rdc',   density: null, densityLabel: '2 pers/3 m² (≤300 m²) + 1 pers/5 m²', ref: 'Art. M 2 §1' },
-      { id: 'vente_ss',    label: 'Vente — sous-sol',        calc: 'surface', density: 1/3,  densityLabel: '1 pers/3 m²',  ref: 'Art. M 2 §1' },
-      { id: 'vente_etage', label: 'Vente — étage',           calc: 'surface', density: 0.2,  densityLabel: '1 pers/5 m²',  ref: 'Art. M 2 §1' },
-    ],
-  },
-  {
-    groupe: 'Type N — Restauration',
-    items: [
-      { id: 'restaurant', label: 'Restaurant — assis (couverts)', calc: 'places',  density: null, densityLabel: '1 pers/couvert', ref: 'Art. N 2 §1' },
-      { id: 'bar',        label: 'Bar / débit de boissons debout',calc: 'surface', density: 4,    densityLabel: '4 pers/m²',      ref: 'MS 5 §1 — public debout' },
-    ],
-  },
-  {
-    groupe: 'Type O — Hôtellerie',
-    items: [
-      { id: 'hotel_lits', label: 'Hôtel — chambres (lits)', calc: 'places', density: null, densityLabel: '1 pers/lit', ref: 'Art. O 2' },
-    ],
-  },
-  {
-    groupe: 'Type P — Danse, jeux',
-    items: [
-      { id: 'dancing', label: 'Salle de danse / jeux', calc: 'surface', density: 2, densityLabel: '2 pers/m²', ref: 'Art. P 2 — à vérifier' },
-    ],
-  },
-  {
-    groupe: 'Type R — Enseignement, formation',
-    items: [
-      { id: 'classe',       label: 'Salle de classe (places assises)', calc: 'places',  density: null, densityLabel: '1 pers/siège', ref: 'Art. R 2 §1' },
-      { id: 'atelier_peda', label: 'Atelier pédagogique',              calc: 'surface', density: 0.2,  densityLabel: '1 pers/5 m²',  ref: 'Art. R 2 §1' },
-    ],
-  },
-  {
-    groupe: 'Type S — Bibliothèques, documentation',
-    items: [
-      { id: 'bibliotheque', label: 'Bibliothèque / médiathèque', calc: 'surface', density: 0.2, densityLabel: '1 pers/5 m²', ref: 'Art. S 2' },
-    ],
-  },
-  {
-    groupe: 'Type T — Expositions',
-    items: [
-      { id: 'exposition', label: "Salle d'exposition", calc: 'surface', density: 0.2, densityLabel: '1 pers/5 m²', ref: 'Art. T 2 §1' },
-    ],
-  },
-  {
-    groupe: 'Type V — Culte',
-    items: [
-      { id: 'culte_assis',  label: 'Lieu de culte — assis',  calc: 'surface', density: 1, densityLabel: '1 pers/m²',             ref: 'Art. V 2 §1' },
-      { id: 'culte_debout', label: 'Lieu de culte — debout', calc: 'surface', density: 4, densityLabel: '4 pers/m² (0,25 m²/p)', ref: 'MS 5 §1 — public debout' },
-    ],
-  },
-  {
-    groupe: 'Type W — Bureaux, administrations',
-    items: [
-      { id: 'bureaux', label: 'Bureaux, administration, banques', calc: 'surface', density: 0.1, densityLabel: '1 pers/10 m²', ref: 'Art. W 2 §1' },
-    ],
-  },
-  {
-    groupe: 'Type X — Sportif couvert',
-    items: [
-      { id: 'sport_aire', label: 'Aire sportive', calc: 'surface', density: 0.2,  densityLabel: '1 pers/5 m²',  ref: 'Art. X 2 §1' },
-      { id: 'gradins',    label: 'Gradins / tribunes',  calc: 'places',  density: null, densityLabel: '1 pers/place', ref: 'Art. X 2 §1' },
-    ],
-  },
-  {
-    groupe: 'Type Y — Musées',
-    items: [
-      { id: 'musee', label: 'Musée, espace culturel', calc: 'surface', density: 0.2, densityLabel: '1 pers/5 m²', ref: 'Art. Y 2 §1' },
-    ],
-  },
+const RATIO_PRESETS = [
+  { label: '— Sélectionner un usage —', value: '' },
+  { label: 'Bureaux / Type W — ERP / ERT  (10 m²/p)', value: '10' },
+  { label: 'Open space ERT — industrie légère (15 m²/p)', value: '15' },
+  { label: 'Atelier ERT — industrie lourde (20 m²/p)', value: '20' },
+  { label: 'Salle de réunion — assis (1 m²/p)', value: '1' },
+  { label: 'Salle debout / hall / foyer (0,25 m²/p)', value: '0.25' },
+  { label: 'Magasin — RdC / entresol (1,5 m²/p)', value: '1.5' },
+  { label: 'Restaurant — couverts (1,5 m²/p)', value: '1.5' },
+  { label: 'Bibliothèque / expo / musée (5 m²/p)', value: '5' },
+  { label: 'Salle de sport — aire sportive (5 m²/p)', value: '5' },
 ]
 
-export const TYPE_MAP = Object.fromEntries(
-  GROUPES.flatMap(g => g.items.map(it => [it.id, it]))
-)
+// ─── Fonctions de calcul ──────────────────────────────────────────────────────
 
-export function calcEffectif({ typeId, surface, places }) {
-  const t = TYPE_MAP[typeId]
-  if (!t) return 0
-  const s = parseFloat(surface) || 0
-  const p = parseInt(places) || 0
-  if (t.calc === 'surface') return Math.ceil(s * t.density)
-  if (t.calc === 'places') return p
-  if (t.calc === 'M_rdc') {
-    if (s <= 0) return 0
-    if (s <= 300) return Math.ceil(s * 2 / 3)
-    return Math.ceil(200 + (s - 300) / 5)
-  }
-  return 0
+function getLevelLabel(sortKey) {
+  if (sortKey === 0) return 'RdC'
+  if (sortKey > 0) return `R+${sortKey}`
+  return `SS${Math.abs(sortKey)}`
+}
+
+function getDegagementsNiveau(effectif, isSS) {
+  if (effectif <= 0) return { nbUp: 0, largeur: '—', nbSorties: 0 }
+  const nbUp = effectif < 20 ? 1 : Math.max(2, Math.ceil(effectif / 100))
+  let nbSorties
+  if (effectif <= 19)        nbSorties = isSS ? 2 : 1
+  else if (effectif <= 500)  nbSorties = 2
+  else if (effectif <= 1000) nbSorties = 3
+  else                       nbSorties = 3 + Math.ceil((effectif - 1000) / 500)
+  return { nbUp, largeur: (nbUp * 0.6).toFixed(2), nbSorties }
+}
+
+// R4228-10 CCT : 1 WC / 25 personnes par sexe (hypothèse 50/50)
+function calcSanitaires(effectif) {
+  if (effectif <= 0) return { wcTotal: 0, urinoirs: 0 }
+  const men   = Math.ceil(effectif / 2)
+  const women = effectif - men
+  const wcH   = Math.ceil(men / 25)
+  const wcF   = women > 0 ? Math.ceil(women / 25) : 0
+  return { wcTotal: Math.max(2, wcH + wcF), urinoirs: wcH }
 }
 
 export function getCategorie(eff) {
@@ -113,202 +51,111 @@ export function getCategorie(eff) {
   if (eff > 1500) return { num: 1, label: '1ère catégorie', color: 'red',    hint: '> 1 500 personnes' }
   if (eff > 700)  return { num: 2, label: '2ème catégorie', color: 'orange', hint: '701 à 1 500 personnes' }
   if (eff > 300)  return { num: 3, label: '3ème catégorie', color: 'amber',  hint: '301 à 700 personnes' }
-  return           { num: 4, label: '4ème cat. (ou 5ème)', color: 'blue',   hint: '≤ 300 personnes' }
+  return           { num: 4, label: '4ème / 5ème cat.', color: 'blue',   hint: '≤ 300 personnes' }
 }
 
-export function getDegagements(eff) {
-  if (eff <= 0) return null
-  // CO 37 — 1 UP pour 100 pers, +1 UP par 100 pers au-delà
-  const nbUp = eff < 20 ? 1 : Math.max(2, Math.ceil(eff / 100))
-  // CO 38 — nombre minimum de sorties (hors sous-sol / configuration spécifique)
-  let nbSorties
-  if (eff <= 19)        nbSorties = 1
-  else if (eff <= 500)  nbSorties = 2
-  else if (eff <= 1000) nbSorties = 3
-  else                  nbSorties = 3 + Math.ceil((eff - 1000) / 500)
-  return { nbUp, largeur: (nbUp * 0.6).toFixed(2), nbSorties }
-}
-
-// ─── Composants UI ────────────────────────────────────────────────────────────
-
-function Badge({ color, children }) {
-  const cls = {
-    red:    'bg-red-100 text-red-800 border-red-200',
-    orange: 'bg-orange-100 text-orange-800 border-orange-200',
-    amber:  'bg-amber-100 text-amber-800 border-amber-200',
-    blue:   'bg-blue-100 text-blue-800 border-blue-200',
-  }[color] || 'bg-gray-100 text-gray-700 border-gray-200'
-  return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${cls}`}>
-      {children}
-    </span>
-  )
-}
-
-// ─── Page principale ──────────────────────────────────────────────────────────
+// ─── Composant principal ──────────────────────────────────────────────────────
 
 export default function CapacitaireERP() {
   const counter = useRef(2)
-  const [locaux, setLocaux] = useState([
-    { id: 1, nom: 'Local 1', typeId: 'bureaux', surface: '100', places: '' },
-  ])
+  const [typeReg, setTypeReg] = useState('ERP')
+  const [ratio, setRatio]     = useState('10')
+  const [niveaux, setNiveaux] = useState([{ id: 1, sortKey: 0, surface: '' }])
 
-  const resultats = useMemo(() => {
-    const items = locaux.map(l => ({
-      ...l,
-      type: TYPE_MAP[l.typeId],
-      effectif: calcEffectif(l),
-    }))
-    const effectifTotal = items.reduce((s, i) => s + i.effectif, 0)
-    return { items, effectifTotal, categorie: getCategorie(effectifTotal), degagements: getDegagements(effectifTotal) }
-  }, [locaux])
+  const ratioNum = parseFloat(ratio) || 0
 
-  function updateLocal(id, field, value) {
-    setLocaux(prev => prev.map(l => l.id === id ? { ...l, [field]: value } : l))
+  const niveauxCalc = useMemo(() =>
+    [...niveaux]
+      .sort((a, b) => b.sortKey - a.sortKey)
+      .map(n => {
+        const surf     = parseFloat(n.surface) || 0
+        const effectif = ratioNum > 0 && surf > 0 ? Math.ceil(surf / ratioNum) : 0
+        const isSS     = n.sortKey < 0
+        const deg      = getDegagementsNiveau(effectif, isSS)
+        const san      = calcSanitaires(effectif)
+        return { ...n, label: getLevelLabel(n.sortKey), effectif, ...deg, ...san }
+      }),
+    [niveaux, ratioNum],
+  )
+
+  const effectifTotal  = niveauxCalc.reduce((s, n) => s + n.effectif, 0)
+  const totalSurface   = niveauxCalc.reduce((s, n) => s + (parseFloat(n.surface) || 0), 0)
+  const categorie      = getCategorie(effectifTotal)
+  const degGlobal      = getDegagementsNiveau(effectifTotal, false)
+
+  function addEtage() {
+    const maxKey = Math.max(...niveaux.map(n => n.sortKey), 0)
+    setNiveaux(prev => [...prev, { id: counter.current++, sortKey: maxKey + 1, surface: '' }])
   }
 
-  function addLocal() {
-    const id = counter.current++
-    setLocaux(prev => [...prev, { id, nom: `Local ${prev.length + 1}`, typeId: 'bureaux', surface: '', places: '' }])
+  function addSousSol() {
+    const minKey = Math.min(...niveaux.map(n => n.sortKey), 0)
+    setNiveaux(prev => [...prev, { id: counter.current++, sortKey: minKey - 1, surface: '' }])
   }
 
-  function removeLocal(id) {
-    setLocaux(prev => prev.filter(l => l.id !== id))
+  function removeNiveau(id) {
+    setNiveaux(prev => prev.filter(n => n.id !== id))
+  }
+
+  function updateSurface(id, value) {
+    setNiveaux(prev => prev.map(n => n.id === id ? { ...n, surface: value } : n))
   }
 
   const controls = (
     <>
       <div>
-        <h2 className="text-2xl font-bold text-gray-800 mb-1">Capacitaire ERP</h2>
-        <p className="text-sm text-gray-500">Arrêté du 25 juin 1980 modifié — Effectif, catégories et dégagements</p>
+        <h2 className="text-2xl font-bold text-gray-800 mb-1">Capacitaire ERP / ERT</h2>
+        <p className="text-sm text-gray-500">Effectif, dégagements et sanitaires par niveau</p>
       </div>
 
-      {/* Liste des locaux */}
-      <div className="space-y-3">
-        {locaux.map((local, idx) => {
-          const type     = TYPE_MAP[local.typeId]
-          const eff      = calcEffectif(local)
-          const usePlaces = type?.calc === 'places'
-          return (
-            <div key={local.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Local {idx + 1}</span>
-                <div className="flex items-center gap-2">
-                  {eff > 0 && <Badge color="blue">{eff} pers.</Badge>}
-                  {locaux.length > 1 && (
-                    <button onClick={() => removeLocal(local.id)}
-                      className="text-gray-300 hover:text-red-400 transition-colors text-xl leading-none"
-                      aria-label="Supprimer">×</button>
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <input
-                  type="text" value={local.nom}
-                  onChange={e => updateLocal(local.id, 'nom', e.target.value)}
-                  placeholder="Nom du local (optionnel)"
-                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none"
-                />
-
-                <select
-                  value={local.typeId}
-                  onChange={e => updateLocal(local.id, 'typeId', e.target.value)}
-                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none bg-white"
-                >
-                  {GROUPES.map(g => (
-                    <optgroup key={g.groupe} label={g.groupe}>
-                      {g.items.map(it => (
-                        <option key={it.id} value={it.id}>{it.label}</option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-
-                <div className="flex items-end gap-3">
-                  {usePlaces ? (
-                    <label className="flex-1">
-                      <span className="block text-xs font-medium text-gray-600 mb-1">
-                        {local.typeId === 'hotel_lits' ? 'Nombre de lits' : 'Places / sièges'}
-                      </span>
-                      <input
-                        type="number" min="0" step="1" value={local.places}
-                        onChange={e => updateLocal(local.id, 'places', e.target.value)}
-                        placeholder="ex : 50"
-                        className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none"
-                      />
-                    </label>
-                  ) : (
-                    <label className="flex-1">
-                      <span className="block text-xs font-medium text-gray-600 mb-1">Surface (m²)</span>
-                      <input
-                        type="number" min="0" step="0.5" value={local.surface}
-                        onChange={e => updateLocal(local.id, 'surface', e.target.value)}
-                        placeholder="ex : 120"
-                        className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none"
-                      />
-                    </label>
-                  )}
-                  <p className="text-xs text-gray-400 pb-2.5 flex-shrink-0">{type?.densityLabel}</p>
-                </div>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-
-      <button
-        onClick={addLocal}
-        className="w-full rounded-xl border-2 border-dashed border-gray-300 py-3 text-sm font-medium text-gray-500 hover:border-brand-400 hover:text-brand-600 transition-colors"
-      >
-        + Ajouter un local
-      </button>
-
-      {/* Résultats */}
-      {resultats.effectifTotal > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Résultats</h3>
-
-          <div className="flex items-center justify-between py-2.5 border-b border-gray-100">
-            <span className="text-sm font-medium text-gray-700">Effectif total</span>
-            <span className="text-xl font-bold text-gray-900">{resultats.effectifTotal} pers.</span>
-          </div>
-
-          {resultats.categorie && (
-            <div className="flex items-center justify-between py-2.5 border-b border-gray-100">
-              <div>
-                <p className="text-sm font-medium text-gray-700">Catégorie ERP</p>
-                <p className="text-xs text-gray-400 mt-0.5">{resultats.categorie.hint}</p>
-              </div>
-              <Badge color={resultats.categorie.color}>{resultats.categorie.label}</Badge>
-            </div>
-          )}
-
-          {resultats.degagements && (
-            <>
-              <div className="flex items-center justify-between py-2.5 border-b border-gray-100">
-                <div>
-                  <p className="text-sm font-medium text-gray-700">Unités de passage (UP)</p>
-                  <p className="text-xs text-gray-400 mt-0.5">1 UP = 0,60 m — CO 37</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-semibold text-gray-900">{resultats.degagements.nbUp} UP</p>
-                  <p className="text-xs text-gray-400">{resultats.degagements.largeur} m min.</p>
-                </div>
-              </div>
-              <div className="flex items-center justify-between py-2.5">
-                <div>
-                  <p className="text-sm font-medium text-gray-700">Sorties minimum</p>
-                  <p className="text-xs text-gray-400 mt-0.5">CO 38 — hors sous-sol / niveaux</p>
-                </div>
-                <p className="text-sm font-semibold text-gray-900">
-                  {resultats.degagements.nbSorties} dégagement{resultats.degagements.nbSorties > 1 ? 's' : ''}
-                </p>
-              </div>
-            </>
-          )}
+      {/* Type réglementaire */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Cadre réglementaire</h3>
+        <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+          {['ERP', 'ERT'].map(t => (
+            <button key={t} onClick={() => setTypeReg(t)}
+              className={`flex-1 py-2 text-sm font-semibold transition-colors ${
+                typeReg === t ? 'bg-brand-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+              }`}
+            >{t}</button>
+          ))}
         </div>
-      )}
+        <p className="text-xs text-gray-400 mt-2">
+          {typeReg === 'ERP'
+            ? 'Arrêté du 25 juin 1980 modifié — CO 37 / CO 38'
+            : 'Code du travail — R4227-34 à -40 / R4228-8 à -11'}
+        </p>
+      </div>
+
+      {/* Ratio global */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Ratio d'occupation global</h3>
+        <label className="block mb-3">
+          <span className="text-sm font-medium text-gray-700">m² / personne</span>
+          <input
+            type="number" min="0.1" step="0.1" value={ratio}
+            onChange={e => setRatio(e.target.value)}
+            className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none"
+          />
+        </label>
+        <label className="block">
+          <span className="text-xs font-medium text-gray-500 mb-1 block">Préset d'usage</span>
+          <select
+            defaultValue=""
+            onChange={e => { if (e.target.value) setRatio(e.target.value) }}
+            className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none bg-white"
+          >
+            {RATIO_PRESETS.map(p => (
+              <option key={p.label} value={p.value}>{p.label}</option>
+            ))}
+          </select>
+        </label>
+        {ratioNum > 0 && (
+          <p className="text-xs text-gray-400 mt-2 text-right">
+            ≈ {(1 / ratioNum).toFixed(2)} pers/m²
+          </p>
+        )}
+      </div>
 
       {/* Références réglementaires */}
       <details className="bg-amber-50 border border-amber-100 rounded-xl">
@@ -316,12 +163,12 @@ export default function CapacitaireERP() {
           Références réglementaires
         </summary>
         <ul className="px-5 pb-4 pt-1 text-xs text-amber-800 space-y-1 list-disc list-inside">
-          <li><strong>Catégories (1 à 5)</strong> — Art. R123-19 du CCH</li>
-          <li><strong>Effectif debout</strong> — MS 5 §1 : 1 pers / 0,25 m²</li>
-          <li><strong>Effectif magasins</strong> — Art. M 2 (Arr. 25 juin 1980 modifié)</li>
-          <li><strong>Unités de passage</strong> — CO 37 : 1 UP / 100 pers, +1 UP / 100 pers au-delà (min. 2 UP si effectif ≥ 20)</li>
-          <li><strong>Nombre de sorties</strong> — CO 38 : varie selon effectif et configuration</li>
-          <li className="font-semibold text-amber-900">⚠ Valeurs indicatives. Vérifier sur le texte officiel et auprès de la commission de sécurité.</li>
+          <li><strong>Catégories ERP</strong> — Art. R123-19 CCH</li>
+          <li><strong>UP / dégagements ERP</strong> — CO 37 et CO 38 (Arr. 25 juin 1980)</li>
+          <li><strong>Sous-sol ERP</strong> — CO 43 §2 : min. 2 dégagements</li>
+          <li><strong>Sanitaires ERT</strong> — R4228-10 CCT : 1 WC / 25 pers par sexe</li>
+          <li><strong>Dégagements ERT</strong> — R4227-34 à R4227-40 CCT</li>
+          <li className="font-semibold text-amber-900">⚠ Valeurs indicatives — vérifier le texte officiel.</li>
         </ul>
       </details>
     </>
@@ -330,7 +177,21 @@ export default function CapacitaireERP() {
   return (
     <ToolLayout
       controls={controls}
-      preview={<CapacitaireViz resultats={resultats} />}
+      preview={
+        <CapacitaireViz
+          niveaux={niveauxCalc}
+          totalSurface={totalSurface}
+          effectifTotal={effectifTotal}
+          categorie={categorie}
+          degGlobal={degGlobal}
+          typeReg={typeReg}
+          ratioNum={ratioNum}
+          onUpdateSurface={updateSurface}
+          onAddEtage={addEtage}
+          onAddSousSol={addSousSol}
+          onRemoveNiveau={removeNiveau}
+        />
+      }
     />
   )
 }

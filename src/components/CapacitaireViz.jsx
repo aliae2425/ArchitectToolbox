@@ -1,140 +1,90 @@
-import { getCategorie } from '../pages/CapacitaireERP'
+// Tableau par niveau — Capacitaire ERP / ERT
 
-const CAT_COLORS = {
-  1: '#ef4444', // red
-  2: '#f97316', // orange
-  3: '#f59e0b', // amber
-  4: '#3b82f6', // blue
-}
+const CAT_COLORS = { 1: '#ef4444', 2: '#f97316', 3: '#f59e0b', 4: '#3b82f6' }
 
-const ZONES = [
-  { num: 4, from: 0,    to: 300,  fill: '#dbeafe', stroke: '#3b82f6', label: '4ème' },
-  { num: 3, from: 300,  to: 700,  fill: '#fef3c7', stroke: '#f59e0b', label: '3ème' },
-  { num: 2, from: 700,  to: 1500, fill: '#fed7aa', stroke: '#f97316', label: '2ème' },
-  { num: 1, from: 1500, to: null, fill: '#fecaca', stroke: '#ef4444', label: '1ère' },
-]
-
-const ROOM_COLORS = ['#3b82f6','#8b5cf6','#10b981','#f97316','#ef4444','#06b6d4','#f59e0b','#6366f1','#14b8a6','#ec4899']
-
-// ─── Effectif meter ───────────────────────────────────────────────────────────
-
-function EffectifMeter({ effectif }) {
-  const W = 520, H = 60, PL = 24, PR = 20, PT = 16, BAR_H = 18
-  const iW = W - PL - PR
-  const scaleMax =
-    effectif <= 300  ? 500  :
-    effectif <= 700  ? 1000 :
-    effectif <= 1500 ? 2000 :
-    Math.ceil(effectif * 1.1 / 500) * 500
-  const xOf = v => PL + (Math.min(v, scaleMax) / scaleMax) * iW
-  const zones = ZONES.map(z => ({ ...z, to: Math.min(z.to ?? scaleMax, scaleMax) }))
-  const ticks = [0, 300, 700, 1500].filter(v => v < scaleMax)
-  ticks.push(scaleMax)
-  const needleX = xOf(effectif)
-
+function LevelBadge({ sortKey }) {
+  const label = sortKey === 0 ? 'RdC' : sortKey > 0 ? `R+${sortKey}` : `SS${Math.abs(sortKey)}`
+  const cls =
+    sortKey < 0  ? 'bg-slate-100 text-slate-700 border-slate-200' :
+    sortKey === 0 ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
+                   'bg-blue-100 text-blue-700 border-blue-200'
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
-      {zones.map(z => {
-        const x1 = xOf(z.from), x2 = xOf(z.to)
-        if (x2 <= x1) return null
-        return (
-          <g key={z.num}>
-            <rect x={x1} y={PT} width={x2 - x1} height={BAR_H}
-              fill={z.fill} stroke={z.stroke} strokeWidth="0.5" />
-            {(x2 - x1) > 32 && (
-              <text x={(x1 + x2) / 2} y={PT + BAR_H / 2}
-                textAnchor="middle" dominantBaseline="middle"
-                fontSize="9" fill={z.stroke} fontWeight="600">{z.label}</text>
-            )}
-          </g>
-        )
-      })}
-
-      {ticks.map(v => (
-        <g key={v}>
-          <line x1={xOf(v)} y1={PT + BAR_H} x2={xOf(v)} y2={PT + BAR_H + 4} stroke="#9ca3af" strokeWidth="0.75" />
-          <text x={xOf(v)} y={PT + BAR_H + 13} textAnchor="middle" fontSize="8" fill="#9ca3af">
-            {v >= 1000 ? `${v / 1000}k` : v}
-          </text>
-        </g>
-      ))}
-
-      {effectif > 0 && (
-        <g>
-          <polygon points={`${needleX - 5},${PT - 4} ${needleX + 5},${PT - 4} ${needleX},${PT + 3}`}
-            fill="#1e293b" />
-          <line x1={needleX} y1={PT - 4} x2={needleX} y2={PT + BAR_H + 4}
-            stroke="#1e293b" strokeWidth="1.5" />
-          <rect x={needleX - 24} y={PT - 18} width={48} height={14} rx="3" fill="#1e293b" />
-          <text x={needleX} y={PT - 11} textAnchor="middle" dominantBaseline="middle"
-            fontSize="9" fill="white" fontWeight="700">{effectif} pers.</text>
-        </g>
-      )}
-    </svg>
+    <span className={`inline-block px-2.5 py-0.5 rounded border text-xs font-bold tracking-wide ${cls}`}>
+      {label}
+    </span>
   )
 }
 
-// ─── Barres par local ─────────────────────────────────────────────────────────
-
-function RoomBars({ items, effectifTotal }) {
-  const visible = items.filter(i => i.effectif > 0)
-  if (!visible.length) return null
-  const maxEff = Math.max(...visible.map(i => i.effectif))
+function Cell({ value, sub, highlight }) {
+  if (!value && value !== 0) return <span className="text-gray-300">—</span>
   return (
-    <div className="space-y-2">
-      {visible.map((item, idx) => {
-        const pct   = (item.effectif / maxEff) * 100
-        const share = effectifTotal > 0 ? Math.round(item.effectif / effectifTotal * 100) : 0
-        const color = ROOM_COLORS[idx % ROOM_COLORS.length]
-        const label = item.nom || item.type?.label || '—'
-        return (
-          <div key={item.id} className="flex items-center gap-2 text-xs">
-            <div className="w-32 flex-shrink-0 text-gray-600 truncate text-right leading-tight" title={label}>
-              {label}
-            </div>
-            <div className="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
-              <div
-                className="h-full rounded-full flex items-center justify-end pr-2 transition-all duration-300"
-                style={{ width: `${Math.max(pct, 8)}%`, backgroundColor: color }}
-              >
-                <span className="text-white font-semibold" style={{ fontSize: '10px' }}>{item.effectif}</span>
-              </div>
-            </div>
-            <div className="w-8 flex-shrink-0 text-gray-400 text-right">{share}%</div>
-          </div>
-        )
-      })}
-    </div>
+    <span className={highlight ? 'font-bold text-gray-900' : 'font-medium text-gray-700'}>
+      {value}
+      {sub && <span className="text-[10px] text-gray-400 ml-0.5">{sub}</span>}
+    </span>
   )
 }
 
-// ─── Schéma dégagements ───────────────────────────────────────────────────────
-
-function DegagementsViz({ degagements }) {
-  const { nbUp, largeur, nbSorties } = degagements
-  const displaySorties = Math.min(nbSorties, 6)
+function AddLevelBtn({ onClick, label, direction, color }) {
+  const borderColor = color === 'blue' ? 'border-blue-300 text-blue-500 hover:border-blue-400 hover:bg-blue-50' : 'border-slate-300 text-slate-500 hover:border-slate-400 hover:bg-slate-50'
   return (
-    <div className="flex flex-wrap items-center gap-4">
-      <div className="flex gap-2 flex-wrap">
-        {Array.from({ length: displaySorties }).map((_, i) => (
-          <div key={i} className="flex flex-col items-center gap-0.5">
-            <svg width="36" height="32" viewBox="0 0 36 32">
-              <rect x="3" y="3" width="30" height="26" rx="2" fill="#f0fdf4" stroke="#16a34a" strokeWidth="1.5" />
-              <rect x="7" y="6" width="16" height="22" rx="1" fill="#bbf7d0" stroke="#16a34a" strokeWidth="1" />
-              <line x1="17" y1="17" x2="26" y2="17" stroke="#16a34a" strokeWidth="1.5" />
-              <polygon points="23,13.5 27,17 23,20.5" fill="#16a34a" />
-            </svg>
-            <span className="text-[9px] text-gray-400">{i + 1}</span>
+    <button onClick={onClick}
+      className={`w-full flex items-center justify-center gap-2 rounded-xl border-2 border-dashed py-2.5 text-sm font-medium transition-colors ${borderColor}`}>
+      <span className="text-base">{direction === 'up' ? '↑' : '↓'}</span>
+      {label}
+    </button>
+  )
+}
+
+// ─── Récapitulatif global ─────────────────────────────────────────────────────
+
+function GlobalRecap({ effectifTotal, categorie, degGlobal, totalSurface, typeReg, ratioNum }) {
+  if (effectifTotal === 0) return null
+  const catColor = CAT_COLORS[categorie?.num] || '#9ca3af'
+
+  return (
+    <div className="bg-white rounded-xl border-2 shadow-sm overflow-hidden"
+      style={{ borderColor: catColor + '60' }}>
+      {/* Header */}
+      <div className="px-5 py-4 flex items-center justify-between"
+        style={{ backgroundColor: catColor + '0e' }}>
+        <div>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-0.5">Récapitulatif global — {typeReg}</p>
+          <p className="text-3xl font-bold" style={{ color: catColor }}>{effectifTotal}</p>
+          <p className="text-xs text-gray-400 mt-0.5">personnes · {totalSurface.toFixed(0)} m²
+            {ratioNum > 0 ? ` · ratio ${ratioNum} m²/p` : ''}
+          </p>
+        </div>
+        {categorie && (
+          <div className="text-right">
+            <span className="inline-block px-3 py-1.5 rounded-lg text-sm font-bold border"
+              style={{ color: catColor, borderColor: catColor, backgroundColor: catColor + '18' }}>
+              {categorie.label}
+            </span>
+            <p className="text-xs text-gray-400 mt-1.5">{categorie.hint}</p>
           </div>
-        ))}
-        {nbSorties > 6 && (
-          <div className="self-center text-xs text-gray-400 font-medium">+{nbSorties - 6}</div>
         )}
       </div>
-      <div className="text-sm">
-        <p className="font-semibold text-gray-800">{nbUp} UP — {largeur} m</p>
-        <p className="text-xs text-gray-400">largeur totale minimum</p>
-        <p className="text-xs text-gray-500 mt-1">{nbSorties} sortie{nbSorties > 1 ? 's' : ''} minimum</p>
+
+      {/* Details */}
+      <div className="grid grid-cols-3 divide-x divide-gray-100 border-t border-gray-100">
+        <div className="px-4 py-3 text-center">
+          <p className="text-2xl font-bold text-gray-900">{degGlobal.nbUp}</p>
+          <p className="text-xs text-gray-500 mt-0.5 font-medium">UP global</p>
+          <p className="text-[10px] text-gray-400">CO 37 — {degGlobal.largeur} m</p>
+        </div>
+        <div className="px-4 py-3 text-center">
+          <p className="text-2xl font-bold text-gray-900">{degGlobal.nbSorties}</p>
+          <p className="text-xs text-gray-500 mt-0.5 font-medium">Sorties globales</p>
+          <p className="text-[10px] text-gray-400">CO 38</p>
+        </div>
+        <div className="px-4 py-3 text-center">
+          <p className="text-2xl font-bold text-gray-900">
+            {Math.max(2, 2 * Math.ceil(effectifTotal / 50))}
+          </p>
+          <p className="text-xs text-gray-500 mt-0.5 font-medium">WC global</p>
+          <p className="text-[10px] text-gray-400">R4228-10 CCT</p>
+        </div>
       </div>
     </div>
   )
@@ -142,63 +92,116 @@ function DegagementsViz({ degagements }) {
 
 // ─── Composant principal ──────────────────────────────────────────────────────
 
-export default function CapacitaireViz({ resultats }) {
-  const { items, effectifTotal, categorie, degagements } = resultats
-
-  if (effectifTotal === 0) {
-    return (
-      <div className="bg-white rounded-xl border border-gray-200 p-10 text-center text-gray-400">
-        <span className="block text-5xl mb-3">🏢</span>
-        <p className="text-sm">Saisissez vos locaux pour calculer le capacitaire.</p>
-      </div>
-    )
-  }
-
-  const catColor = CAT_COLORS[categorie?.num] || '#9ca3af'
+export default function CapacitaireViz({
+  niveaux, totalSurface, effectifTotal, categorie, degGlobal,
+  typeReg, ratioNum,
+  onUpdateSurface, onAddEtage, onAddSousSol, onRemoveNiveau,
+}) {
+  const hasSS = niveaux.some(n => n.sortKey < 0 && n.effectif > 0)
 
   return (
     <div className="space-y-3">
 
-      {/* Effectif total + catégorie */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Effectif total</p>
-            <p className="text-4xl font-bold leading-none" style={{ color: catColor }}>
-              {effectifTotal}
-            </p>
-            <p className="text-xs text-gray-400 mt-1">personnes</p>
-          </div>
-          {categorie && (
-            <div className="text-right">
-              <span
-                className="inline-block px-3 py-1.5 rounded-lg text-sm font-bold border"
-                style={{ color: catColor, borderColor: catColor, backgroundColor: catColor + '1a' }}
-              >
-                {categorie.label}
-              </span>
-              <p className="text-xs text-gray-400 mt-1.5">{categorie.hint}</p>
-            </div>
-          )}
+      {/* Bouton ajout superstructure */}
+      <AddLevelBtn onClick={onAddEtage} label="Ajouter un niveau superstructure" direction="up" color="blue" />
+
+      {/* Tableau par niveau */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[600px]">
+            <thead>
+              <tr className="border-b border-gray-200 bg-gray-50">
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-20">Niveau</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Surface (m²)</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Effectif</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">UP</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Dégag. min.</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">WC cab.</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Urinoirs</th>
+                <th className="w-8 px-2" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {niveaux.map(n => (
+                <tr key={n.id}
+                  className={`transition-colors hover:bg-gray-50 ${n.sortKey < 0 ? 'bg-slate-50/60' : ''}`}>
+                  <td className="px-4 py-3">
+                    <LevelBadge sortKey={n.sortKey} />
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <input
+                      type="number" min="0" step="1" value={n.surface}
+                      onChange={e => onUpdateSurface(n.id, e.target.value)}
+                      placeholder="—"
+                      className="w-24 rounded-lg border border-gray-300 px-2 py-1.5 text-sm text-right focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none"
+                    />
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <Cell value={n.effectif > 0 ? n.effectif : null} highlight />
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <Cell value={n.nbUp > 0 ? n.nbUp : null} sub={n.nbUp > 0 ? ' UP' : ''} />
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    {n.nbSorties > 0 ? (
+                      <span className="font-medium text-gray-700">
+                        {n.nbSorties}
+                        {n.sortKey < 0 && <span className="text-[10px] text-slate-400 ml-0.5">*</span>}
+                      </span>
+                    ) : <span className="text-gray-300">—</span>}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <Cell value={n.wcTotal > 0 ? n.wcTotal : null} />
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <Cell value={n.urinoirs > 0 ? n.urinoirs : null} />
+                  </td>
+                  <td className="px-2 py-3 text-center">
+                    {n.sortKey !== 0 && (
+                      <button onClick={() => onRemoveNiveau(n.id)}
+                        className="text-gray-300 hover:text-red-400 transition-colors text-xl leading-none"
+                        aria-label="Supprimer">×</button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+
+            {/* Ligne totaux */}
+            {effectifTotal > 0 && (
+              <tfoot>
+                <tr className="border-t-2 border-gray-200 bg-gray-50">
+                  <td className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wide">Total</td>
+                  <td className="px-4 py-3 text-right text-xs text-gray-400">{totalSurface.toFixed(0)} m²</td>
+                  <td className="px-4 py-3 text-right font-bold text-gray-900">{effectifTotal}</td>
+                  <td colSpan="4" className="px-4 py-3 text-right text-xs text-gray-400 italic">→ récapitulatif global ci-dessous</td>
+                  <td />
+                </tr>
+              </tfoot>
+            )}
+          </table>
         </div>
-        <EffectifMeter effectif={effectifTotal} />
+
+        {/* Note sous-sol */}
+        {hasSS && (
+          <p className="px-4 py-2 text-xs text-slate-500 border-t border-gray-100">
+            * Sous-sol : minimum 2 dégagements requis — CO 43 §2 (ERP) / R4227-38 (ERT)
+          </p>
+        )}
       </div>
 
-      {/* Répartition par local */}
-      {items.some(i => i.effectif > 0) && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Répartition par local</p>
-          <RoomBars items={items} effectifTotal={effectifTotal} />
-        </div>
-      )}
+      {/* Bouton ajout infrastructure */}
+      <AddLevelBtn onClick={onAddSousSol} label="Ajouter un niveau infrastructure" direction="down" color="slate" />
 
-      {/* Dégagements */}
-      {degagements && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Dégagements requis — CO 37 / CO 38</p>
-          <DegagementsViz degagements={degagements} />
-        </div>
-      )}
+      {/* Récapitulatif global */}
+      <GlobalRecap
+        effectifTotal={effectifTotal}
+        categorie={categorie}
+        degGlobal={degGlobal}
+        totalSurface={totalSurface}
+        typeReg={typeReg}
+        ratioNum={ratioNum}
+      />
 
     </div>
   )
