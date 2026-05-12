@@ -29,20 +29,12 @@ export default function RampeVelo3D({ segments, largeur }) {
     const renderer = new THREE.WebGLRenderer({ antialias: true })
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     renderer.setSize(W, H)
-    renderer.shadowMap.enabled = true
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap
     container.appendChild(renderer.domElement)
 
     // ── Lights ───────────────────────────────────────────────────────────────
     scene.add(new THREE.AmbientLight(0xffffff, 0.7))
     const sun = new THREE.DirectionalLight(0xfffbe6, 1.0)
     sun.position.set(20, 30, 15)
-    sun.castShadow = true
-    sun.shadow.camera.near = 0.1
-    sun.shadow.camera.far  = 200
-    sun.shadow.camera.left = sun.shadow.camera.bottom = -30
-    sun.shadow.camera.right = sun.shadow.camera.top   = 30
-    sun.shadow.mapSize.set(1024, 1024)
     scene.add(sun)
     const fill = new THREE.DirectionalLight(0xdde8ff, 0.35)
     fill.position.set(-15, 8, -8)
@@ -66,8 +58,6 @@ export default function RampeVelo3D({ segments, largeur }) {
       const mesh = new THREE.Mesh(geom,
         new THREE.MeshPhongMaterial({ color: SEG_COLOR[seg.type] ?? SEG_COLOR.ramp, shininess: 50 }),
       )
-      mesh.castShadow    = true
-      mesh.receiveShadow = true
       scene.add(mesh)
 
       scene.add(new THREE.LineSegments(
@@ -83,7 +73,6 @@ export default function RampeVelo3D({ segments, largeur }) {
     )
     ground.rotation.x = -Math.PI / 2
     ground.position.set(totalW / 2, -SLAB_H, w / 2)
-    ground.receiveShadow = true
     scene.add(ground)
 
     const gridSize = Math.ceil(Math.max(totalW + 8, w + 8))
