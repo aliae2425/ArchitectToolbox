@@ -7,6 +7,12 @@ const tools = [
       { label: 'Rampes PMR', path: '/rampe-pmr', icon: '♿' },
     ],
   },
+  {
+    category: 'Sécurité incendie',
+    items: [
+      { label: 'Capacitaire ERP', path: '/capacitaire-erp', icon: '🏢' },
+    ],
+  },
 ]
 
 export default function Sidebar({ onClose }) {
