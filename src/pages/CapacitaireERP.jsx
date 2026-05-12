@@ -121,13 +121,15 @@ export default function CapacitaireERP() {
     setNiveaux(prev => prev.filter(n => n.id !== id))
   }
 
+  const header = (
+    <>
+      <h2 className="text-2xl font-bold text-gray-800 mb-1">Capacitaire ERP / ERT</h2>
+      <p className="text-sm text-gray-500">Effectif, dégagements et sanitaires par niveau</p>
+    </>
+  )
+
   const controls = (
     <>
-      <div>
-        <h2 className="text-2xl font-bold text-gray-800 mb-1">Capacitaire ERP / ERT</h2>
-        <p className="text-sm text-gray-500">Effectif, dégagements et sanitaires par niveau</p>
-      </div>
-
       {/* Cadre réglementaire global (défaut) */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
         <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Cadre réglementaire (défaut)</h3>
@@ -188,6 +190,7 @@ export default function CapacitaireERP() {
 
   return (
     <ToolLayout
+      header={header}
       controls={controls}
       preview={
         <CapacitaireViz
