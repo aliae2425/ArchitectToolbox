@@ -85,10 +85,12 @@ export default function RampeViz({ denivelee, largeur = 1.40 }) {
   }
 
   const SVG_W = 560
-  const ML = 48, MR = 16
+  const ML = 48
+  const MR_C = 16   // coupe — no right labels
+  const MR_P = 72   // plan  — room for "L = x.xx m" label
   const MT_C = 22, MB_C = 28
   const MT_P = 30, MB_P = 28
-  const UW = SVG_W - ML - MR
+  const UW = SVG_W - ML - MR_C   // coupe scale
 
   // Scale from widest profile (5 %) so all curves fit
   const refW = profiles[0].p.W
@@ -106,7 +108,14 @@ export default function RampeViz({ denivelee, largeur = 1.40 }) {
   const COTE_H     = 22
   const ROW_GAP    = 8
   const ROW_STRIDE = ROW_H + COTE_H + ROW_GAP
-  const PLAN_H     = MT_P + SCENARIOS.length * ROW_STRIDE - ROW_GAP + MB_P
+
+  const planProfiles = profiles.filter(s => !(s.pente === 12 && !s.p.compliant))
+  const PLAN_H = MT_P + planProfiles.length * ROW_STRIDE - ROW_GAP + MB_P
+
+  // Separate scale for plan to leave room for right-side total label
+  const UW_P = SVG_W - ML - MR_P
+  const xsP  = UW_P / refW
+  const sxP  = rx => ML + rx * xsP
 
   const coteLineY = y0 => y0 + ROW_H + 6
   const coteTextY = y0 => y0 + ROW_H + 18
@@ -212,14 +221,14 @@ export default function RampeViz({ denivelee, largeur = 1.40 }) {
             {/* Largeur dimension */}
             <line x1={ML - 28} y1={MT_P} x2={ML - 28} y2={MT_P + ROW_H}
               stroke="#9ca3af" strokeWidth="1" markerEnd="url(#p-up)" markerStart="url(#p-dn)" />
-            <text x={ML - 32} y={MT_P + ROW_H / 2} fontSize="10" fill="#6b7280"
+            <text x={ML - 33} y={MT_P + ROW_H / 2} fontSize="10" fill="#6b7280"
               textAnchor="middle" dominantBaseline="middle"
-              transform={`rotate(-90,${ML - 32},${MT_P + ROW_H / 2})`}>
+              transform={`rotate(-90,${ML - 33},${MT_P + ROW_H / 2})`}>
               l = {w.toFixed(2)} m
             </text>
 
             {/* Scenario rows */}
-            {profiles.map(({ stroke, fill, label, p }, idx) => {
+            {planProfiles.map(({ stroke, fill, label, p }, idx) => {
               const y0  = MT_P + idx * ROW_STRIDE
               const clY = coteLineY(y0)
               const ctY = coteTextY(y0)
@@ -232,8 +241,8 @@ export default function RampeViz({ denivelee, largeur = 1.40 }) {
                     const isNonConf = !p.compliant && seg.type === 'ramp'
                     return (
                       <rect key={si}
-                        x={sx(seg.x1)} y={y0}
-                        width={Math.max(sx(seg.x2) - sx(seg.x1), 0.5)}
+                        x={sxP(seg.x1)} y={y0}
+                        width={Math.max(sxP(seg.x2) - sxP(seg.x1), 0.5)}
                         height={ROW_H}
                         fill={seg.type === 'ramp' ? fill : isApprDep ? '#f0fdf4' : '#f3f4f6'}
                         fillOpacity={isNonConf ? 0.45 : 1}
@@ -248,27 +257,19 @@ export default function RampeViz({ denivelee, largeur = 1.40 }) {
                     )
                   })}
 
-                  <text x={sx(p.W) + 8} y={y0 + ROW_H / 2 - 6}
-                    fontSize="12" fill={stroke} fontWeight="700" dominantBaseline="middle">
-                    {label}
-                  </text>
-                  <text x={sx(p.W) + 8} y={y0 + ROW_H / 2 + 9} fontSize="10" fill="#9ca3af">
-                    {p.W.toFixed(2)} m
-                  </text>
-
-                  {/* Dimension line */}
-                  <line x1={sx(0)} y1={clY} x2={sx(p.W)} y2={clY}
+                  {/* Dimension line with ticks */}
+                  <line x1={sxP(0)} y1={clY} x2={sxP(p.W)} y2={clY}
                     stroke="#d1d5db" strokeWidth="0.75" />
                   {bxs.map(bx => (
                     <line key={bx}
-                      x1={sx(bx)} y1={clY - 4} x2={sx(bx)} y2={clY + 4}
+                      x1={sxP(bx)} y1={clY - 4} x2={sxP(bx)} y2={clY + 4}
                       stroke="#9ca3af" strokeWidth="0.75" />
                   ))}
 
                   {/* Segment length labels */}
                   {p.segs.map((seg, si) => {
-                    const segPx = sx(seg.x2) - sx(seg.x1)
-                    const midX  = (sx(seg.x1) + sx(seg.x2)) / 2
+                    const segPx = sxP(seg.x2) - sxP(seg.x1)
+                    const midX  = (sxP(seg.x1) + sxP(seg.x2)) / 2
                     const lenM  = seg.x2 - seg.x1
                     if (segPx < 30) return null
                     return (
@@ -281,18 +282,11 @@ export default function RampeViz({ denivelee, largeur = 1.40 }) {
                     )
                   })}
 
-                  {/* Total length arrow (first row only) */}
-                  {idx === 0 && (
-                    <g>
-                      <line x1={sx(0)} y1={y0 - 9} x2={sx(p.W)} y2={y0 - 9}
-                        stroke="#d1d5db" strokeWidth="0.75"
-                        markerEnd="url(#p-up)" markerStart="url(#p-dn)" />
-                      <text x={(sx(0) + sx(p.W)) / 2} y={y0 - 15}
-                        fontSize="9" fill="#6b7280" textAnchor="middle">
-                        L totale = {p.W.toFixed(2)} m
-                      </text>
-                    </g>
-                  )}
+                  {/* Total cote — right of dimension line, every row */}
+                  <text x={sxP(p.W) + 6} y={clY} fontSize="9" fill={stroke}
+                    fontWeight="600" dominantBaseline="middle">
+                    L = {p.W.toFixed(2)} m
+                  </text>
                 </g>
               )
             })}
