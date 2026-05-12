@@ -4,7 +4,8 @@ const tools = [
   {
     category: 'Accessibilité',
     items: [
-      { label: 'Rampes PMR', path: '/rampe-pmr', icon: '♿' },
+      { label: 'Rampes PMR',     path: '/rampe-pmr',     icon: '♿' },
+      { label: 'Rampes parking', path: '/rampe-parking', icon: '🚗' },
     ],
   },
   {
