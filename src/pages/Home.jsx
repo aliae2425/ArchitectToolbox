@@ -7,6 +7,18 @@ const tools = [
     icon: '♿',
     description: 'Calcul de pente, longueur et paliers selon la réglementation ERP.',
   },
+  {
+    label: 'Rampes parking',
+    path: '/rampe-parking',
+    icon: '🚗',
+    description: 'Calcul de rampe de stationnement selon la norme NF P91-100.',
+  },
+  {
+    label: 'Capacitaire ERP',
+    path: '/capacitaire-erp',
+    icon: '🏢',
+    description: 'Calcul de l\'effectif, de la catégorie ERP et des dégagements requis (CO 37-38).',
+  },
 ]
 
 export default function Home() {
