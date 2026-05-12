@@ -6,6 +6,7 @@ const tools = [
     items: [
       { label: 'Rampes PMR',     path: '/rampe-pmr',     icon: '♿' },
       { label: 'Rampes parking', path: '/rampe-parking', icon: '🚗' },
+      { label: 'Rampes vélo',    path: '/rampe-velo',    icon: '🚲' },
     ],
   },
   {
