@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, Link } from 'react-router-dom'
 
 const tools = [
   {
@@ -21,10 +21,10 @@ export default function Sidebar({ onClose }) {
   return (
     <div className="w-64 flex-shrink-0 bg-brand-900 text-white flex flex-col h-full">
       <div className="px-6 py-5 border-b border-brand-700 flex items-center justify-between">
-        <h1 className="text-lg font-bold tracking-wide uppercase leading-tight">
+        <Link to="/" className="text-lg font-bold tracking-wide uppercase leading-tight hover:opacity-80 transition-opacity">
           Architect<br />
           <span className="text-brand-100 font-light">Toolbox</span>
-        </h1>
+        </Link>
         {onClose && (
           <button
             onClick={onClose}

@@ -14,6 +14,12 @@ const tools = [
     description: 'Calcul de rampe de stationnement selon la norme NF P91-100.',
   },
   {
+    label: 'Rampes vélo',
+    path: '/rampe-velo',
+    icon: '🚲',
+    description: 'Calcul de rampe vélo avec modélisation 3D et aide au dimensionnement.',
+  },
+  {
     label: 'Capacitaire ERP',
     path: '/capacitaire-erp',
     icon: '🏢',
