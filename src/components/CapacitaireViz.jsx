@@ -183,11 +183,36 @@ export default function CapacitaireViz({
                       />
                     </td>
 
-                    {/* Effectif niveau */}
+                    {/* Effectif niveau — éditable, override en ambré */}
                     <td className="px-3 py-2.5 text-center">
-                      {n.effectif > 0
-                        ? <span className="font-bold text-gray-900">{n.effectif}</span>
-                        : <span className="text-gray-200">—</span>}
+                      <div className="inline-flex items-center justify-center gap-1">
+                        <input
+                          type="number"
+                          min="0"
+                          value={n.hasOverride ? String(n.effectifOverride) : (n.effectif > 0 ? String(n.effectif) : '')}
+                          placeholder="—"
+                          onChange={e => {
+                            const val = e.target.value
+                            if (val === '') {
+                              onUpdateNiveau(n.id, 'effectifOverride', null)
+                            } else {
+                              onUpdateNiveau(n.id, 'effectifOverride', Math.max(0, parseInt(val) || 0))
+                            }
+                          }}
+                          className={`w-16 rounded border px-1.5 py-1 text-xs text-center focus:outline-none focus:ring-1 transition-colors ${
+                            n.hasOverride
+                              ? 'border-amber-400 bg-amber-50 text-amber-800 font-bold focus:ring-amber-400'
+                              : 'border-transparent bg-transparent text-gray-900 font-bold hover:border-gray-300 focus:border-brand-500 focus:ring-brand-500'
+                          }`}
+                        />
+                        <button
+                          onClick={() => onUpdateNiveau(n.id, 'effectifOverride', null)}
+                          title="Remettre le calcul automatique"
+                          aria-label="Réinitialiser l'effectif"
+                          style={{ visibility: n.hasOverride ? 'visible' : 'hidden' }}
+                          className="text-amber-500 hover:text-amber-700 transition-colors leading-none"
+                        >↺</button>
+                      </div>
                     </td>
 
                     {/* ── Dégagements niveau ── */}

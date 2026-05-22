@@ -26,9 +26,14 @@ function getLevelLabel(sortKey) {
 
 function getDegagementsNiveau(effectif, isSS) {
   if (effectif <= 0) return { nbUp: 0, largeur: '—', nbSorties: 0 }
-  const nbUp = effectif < 20 ? 1 : Math.max(2, Math.ceil(effectif / 100))
+  // CO 37 : ceil(N/100)+1 pour ≤500, ceil(N/100) au-delà
+  const nbUp = effectif < 20 ? 1
+    : effectif <= 500 ? Math.ceil(effectif / 100) + 1
+    : Math.ceil(effectif / 100)
   let nbSorties
+  // CO 38 : ≤19=1, 20-50=1normal+1acc, 51-500=2, 501-1000=3, ≥1001=+1/500
   if (effectif <= 19)        nbSorties = isSS ? 2 : 1
+  else if (effectif <= 50)   nbSorties = 1
   else if (effectif <= 500)  nbSorties = 2
   else if (effectif <= 1000) nbSorties = 3
   else                       nbSorties = 3 + Math.ceil((effectif - 1000) / 500)
@@ -59,8 +64,8 @@ export default function CapacitaireERP() {
   const counter = useRef(2)
   const [typeReg, setTypeReg] = useState('ERP')
   const [ratio, setRatio]     = useState('10')
-  // Each level: { id, sortKey, surface, typeReg: null|'ERP'|'ERT' }
-  const [niveaux, setNiveaux] = useState([{ id: 1, sortKey: 0, surface: '', typeReg: null }])
+  // Each level: { id, sortKey, surface, typeReg: null|'ERP'|'ERT', effectifOverride: null|number }
+  const [niveaux, setNiveaux] = useState([{ id: 1, sortKey: 0, surface: '', typeReg: null, effectifOverride: null }])
 
   const ratioNum = parseFloat(ratio) || 0
 
@@ -69,12 +74,14 @@ export default function CapacitaireERP() {
     const sorted = [...niveaux]
       .sort((a, b) => b.sortKey - a.sortKey)
       .map(n => {
-        const surf     = parseFloat(n.surface) || 0
-        const effectif = ratioNum > 0 && surf > 0 ? Math.ceil(surf / ratioNum) : 0
-        const isSS     = n.sortKey < 0
-        const deg      = getDegagementsNiveau(effectif, isSS)
-        const san      = calcSanitaires(effectif)
-        return { ...n, label: getLevelLabel(n.sortKey), effectif, ...deg, ...san }
+        const surf        = parseFloat(n.surface) || 0
+        const effectifCalc = ratioNum > 0 && surf > 0 ? Math.ceil(surf / ratioNum) : 0
+        const hasOverride  = n.effectifOverride != null
+        const effectif     = hasOverride ? n.effectifOverride : effectifCalc
+        const isSS        = n.sortKey < 0
+        const deg         = getDegagementsNiveau(effectif, isSS)
+        const san         = calcSanitaires(effectif)
+        return { ...n, label: getLevelLabel(n.sortKey), effectif, effectifCalc, hasOverride, ...deg, ...san }
       })
 
     // Step 2: cumulative effectif
@@ -94,7 +101,9 @@ export default function CapacitaireERP() {
       const ec       = cumulMap[n.id] ?? 0
       const isSS     = n.sortKey < 0
       const degCumul = getDegagementsNiveau(ec, isSS)
-      return { ...n, effectifCumul: ec, degCumul, acc: Math.max(0, n.nbSorties - 2) }
+      // acc : 1 accessoire uniquement pour la tranche 20-50 (CO 38)
+      const acc = (n.effectif > 19 && n.effectif <= 50) ? 1 : 0
+      return { ...n, effectifCumul: ec, degCumul, acc }
     })
   }, [niveaux, ratioNum])
 
@@ -109,12 +118,12 @@ export default function CapacitaireERP() {
 
   function addEtage() {
     const maxKey = Math.max(...niveaux.map(n => n.sortKey), 0)
-    setNiveaux(prev => [...prev, { id: counter.current++, sortKey: maxKey + 1, surface: '', typeReg: null }])
+    setNiveaux(prev => [...prev, { id: counter.current++, sortKey: maxKey + 1, surface: '', typeReg: null, effectifOverride: null }])
   }
 
   function addSousSol() {
     const minKey = Math.min(...niveaux.map(n => n.sortKey), 0)
-    setNiveaux(prev => [...prev, { id: counter.current++, sortKey: minKey - 1, surface: '', typeReg: null }])
+    setNiveaux(prev => [...prev, { id: counter.current++, sortKey: minKey - 1, surface: '', typeReg: null, effectifOverride: null }])
   }
 
   function removeNiveau(id) {
