@@ -129,11 +129,31 @@ const INIT_SEGS = [
   { id: 3, type: 'racc', pente: String(RACC_PENTE), hauteur: '', longueur: '' },
 ]
 
+// Pré-remplissage par l'URL, pour l'extension Revit 418 : elle lit la
+// dénivelée et la largeur dans la maquette et ouvre cette page avec
+// `?h=3.20&w=3.00&p=15`. Lu une seule fois au montage — ensuite la page
+// s'édite normalement. Sans paramètre, rien ne change.
+//   h = hauteur totale à franchir (m) · w = largeur (m) · p = pente rampe (%)
+// `Number` et non `parseFloat` : parseFloat tronque silencieusement, donc
+// « ?h=3,20 » deviendrait 3 m au lieu de 3,20 m — 20 cm perdus sans un mot
+// sur un calcul de pente. La virgule est acceptée, l'appli est francophone.
+function fromQuery(cle, defaut, max) {
+  const brut = new URLSearchParams(window.location.search).get(cle)
+  const valeur = Number((brut || '').replace(',', '.'))
+  if (!isFinite(valeur) || valeur <= 0) return defaut
+  return String(max !== undefined ? Math.min(valeur, max) : valeur)
+}
+
 export default function RampeParking() {
-  const [segs, setSegs]                   = useState(INIT_SEGS)
-  const [largeur, setLargeur]             = useState('3.00')
+  const [segs, setSegs]                   = useState(() => {
+    const pente = fromQuery('p', null, 30)   // 30 = max de l'input Pente
+    return pente === null
+      ? INIT_SEGS
+      : INIT_SEGS.map(s => s.type === 'ramp' ? { ...s, pente } : s)
+  })
+  const [largeur, setLargeur]             = useState(() => fromQuery('w', '3.00'))
   const [inputMode, setInputMode]         = useState('reglementaire')
-  const [hauteurTotale, setHauteurTotale] = useState('')
+  const [hauteurTotale, setHauteurTotale] = useState(() => fromQuery('h', ''))
 
   const largeurNum = parseFloat(largeur) || 0
   const H_aide     = parseFloat(hauteurTotale) || 0
